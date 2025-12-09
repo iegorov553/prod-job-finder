@@ -1,0 +1,57 @@
+# Product Manager Telegram Job Digester
+
+Daily one-shot Telegram user-bot that fetches posts from specified channels, sends them to an LLM for relevance filtering/normalization, and delivers a single Markdown digest to your Saved Messages.
+
+## Features
+- Telethon user-bot: fetches new posts per channel, tracks `last_message_id`.
+- LLM filtering for a single Product Manager profile (middle/senior/lead, remote or Barcelona, EN/RU, ~100k+ USD).
+- Minimal state in `state.json`.
+- One run = full cycle (fetch → analyze → digest → send), suitable for Railway cron.
+
+## Configuration
+Populate environment variables (or `.env`):
+```
+TELEGRAM_API_ID=...
+TELEGRAM_API_HASH=...
+TELEGRAM_SESSION=telegram_session
+TELEGRAM_CHANNELS=@channel1,@channel2
+LLM_API_KEY=...
+LLM_MODEL_NAME=gpt-4.1-mini
+LLM_BASE_URL=https://api.openai.com/v1
+MAX_POSTS_PER_BATCH=10
+HOURS_LOOKBACK=24
+STATE_PATH=state.json
+```
+See `.env.example` for a ready template.
+
+## Local Setup
+1. Install dependencies (Poetry recommended):
+   - `poetry install` (installs main + dev tools) or `pip install -r requirements.txt`.
+2. Initialize Telethon session (first run will ask for Telegram code/password):
+   - `python main.py` and follow prompts to store the session file (`TELEGRAM_SESSION`).
+3. Run the bot once:
+   - `python main.py`
+
+## Testing & Quality
+- `ruff format .` then `ruff check .`
+- `mypy src`
+- `pytest`
+- Optional security checks: `bandit -c pyproject.toml -r src`, `pip-audit -r requirements.txt`
+- Pre-commit: `pre-commit install` to run all hooks locally.
+
+## Docker
+```
+docker build -t pm-job-digester .
+docker run --rm --env-file .env pm-job-digester
+```
+The image uses Poetry to install deps; tests can run inside the same image.
+
+## Deploy on Railway
+1. Push this repo to Railway (use `staging` branch; avoid `main`).
+2. Configure environment variables in project settings.
+3. Add a cron job that runs `python main.py` daily in the service image.
+
+## Notes
+- Channels are configurable via `TELEGRAM_CHANNELS`.
+- LLM endpoint/model are configurable via `LLM_BASE_URL` and `LLM_MODEL_NAME`.
+- State persists in `STATE_PATH` (JSON). Delete the file to rescan all messages.

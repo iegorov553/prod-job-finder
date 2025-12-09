@@ -1,0 +1,55 @@
+[tool.poetry]
+name = "prod-job-finder"
+version = "0.1.0"
+description = "Daily Telegram vacancy digester for Product Manager roles"
+authors = ["Codex <dev@example.com>"]
+readme = "README.md"
+packages = [{ include = "job_finder", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+telethon = "^1.36.0"
+python-dotenv = "^1.0.1"
+requests = "^2.31.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.2"
+pytest-asyncio = "^0.23.8"
+ruff = "^0.5.5"
+mypy = "^1.10.0"
+bandit = "^1.7.9"
+pip-audit = "^2.7.3"
+pre-commit = "^3.7.1"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "W", "C90"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+disallow_untyped_defs = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
