@@ -25,6 +25,7 @@ def _config(tmp_path) -> Config:
         telegram_api_id=1,
         telegram_api_hash="hash",
         telegram_session="session",
+        telegram_session_base64=None,
         telegram_channels=["@a"],
         llm_api_key="key",
         llm_model_name="model",

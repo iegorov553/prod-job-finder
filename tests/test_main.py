@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from types import SimpleNamespace
 from typing import List
 
@@ -34,6 +35,7 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
         telegram_api_id=1,
         telegram_api_hash="hash",
         telegram_session="session",
+        telegram_session_base64=None,
         telegram_channels=["@a"],
         llm_api_key="key",
         llm_model_name="model",
@@ -98,3 +100,14 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
     await main_module._run_once(config)
     assert dummy_client.sent, "Сообщение должно быть отправлено"
     assert saved_state["last"] == 1
+
+
+def test_ensure_session_file(tmp_path) -> None:
+    session_bytes = b"dummy"
+    encoded = base64.b64encode(session_bytes).decode()
+    session_name = "telegram_session"
+    # run helper
+    main_module._ensure_session_file(session_name, encoded, tmp_path)
+    session_path = tmp_path / f"{session_name}.session"
+    assert session_path.exists()
+    assert session_path.read_bytes() == session_bytes

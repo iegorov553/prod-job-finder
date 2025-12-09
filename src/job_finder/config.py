@@ -15,6 +15,7 @@ class Config:
     telegram_api_id: int
     telegram_api_hash: str
     telegram_session: str
+    telegram_session_base64: str | None
     telegram_channels: List[str]
 
     llm_api_key: str
@@ -44,6 +45,7 @@ def load_config(env_path: str | None = ".env") -> Config:
     if not telegram_api_hash:
         raise ValueError("TELEGRAM_API_HASH is required")
     telegram_session = os.environ.get("TELEGRAM_SESSION", "telegram_session")
+    telegram_session_base64 = os.environ.get("TELEGRAM_SESSION_BASE64")
     telegram_channels = _parse_channels(os.environ.get("TELEGRAM_CHANNELS"))
 
     llm_api_key = os.environ.get("LLM_API_KEY")
@@ -61,6 +63,7 @@ def load_config(env_path: str | None = ".env") -> Config:
         telegram_api_id=telegram_api_id,
         telegram_api_hash=telegram_api_hash,
         telegram_session=telegram_session,
+        telegram_session_base64=telegram_session_base64,
         telegram_channels=telegram_channels,
         llm_api_key=llm_api_key,
         llm_model_name=llm_model_name,

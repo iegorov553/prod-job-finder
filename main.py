@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import base64
+from pathlib import Path
 
 from job_finder import digest, llm_client, scraper, state
 from job_finder.config import Config, load_config
@@ -11,7 +13,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 
+def _ensure_session_file(session_name: str, session_base64: str | None, base_dir: Path) -> None:
+    session_path = base_dir / f"{session_name}.session"
+    if session_path.exists():
+        return
+    if not session_base64:
+        return
+    data = base64.b64decode(session_base64)
+    session_path.write_bytes(data)
+    logger.info("Восстановлен файл сессии Telethon из TELEGRAM_SESSION_BASE64.")
+
+
 async def _run_once(config: Config) -> None:
+    _ensure_session_file(config.telegram_session, config.telegram_session_base64, Path("."))
     current_state = state.load_state(config.state_path, config.telegram_channels)
     client = scraper.create_client(
         config.telegram_api_id,

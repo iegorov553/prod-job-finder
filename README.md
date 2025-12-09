@@ -14,6 +14,8 @@ Populate environment variables (or `.env`):
 TELEGRAM_API_ID=...
 TELEGRAM_API_HASH=...
 TELEGRAM_SESSION=telegram_session
+# Optional for non-interactive setups: base64-encoded Telethon session file content
+# TELEGRAM_SESSION_BASE64=...
 TELEGRAM_CHANNELS=@channel1,@channel2
 LLM_API_KEY=...
 LLM_MODEL_NAME=gpt-4.1-mini
@@ -49,6 +51,8 @@ The image uses Poetry to install deps; tests can run inside the same image.
 ## Deploy on Railway
 1. Push this repo to Railway (use `staging` branch; avoid `main`).
 2. Configure environment variables in project settings.
+   - For non-interactive login, create Telethon session locally once: run `python main.py`, complete Telegram code/password, then base64-encode the generated `TELEGRAM_SESSION.session` file (`base64 -w0 telegram_session.session`) and set `TELEGRAM_SESSION_BASE64`.
+   - Alternatively, mount a persistent volume and place the `.session` file there under the configured `TELEGRAM_SESSION` name.
 3. Add a cron job that runs `python main.py` daily in the service image.
 
 ## Notes
