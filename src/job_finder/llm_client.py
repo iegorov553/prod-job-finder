@@ -69,7 +69,15 @@ def _parse_batch_response(
     for item in data:
         if not isinstance(item, dict):
             continue
-        post_id = int(item.get("id"))
+        raw_id = item.get("id")
+        if raw_id is None:
+            logger.warning("Пропуск ответа без id: %s", item)
+            continue
+        try:
+            post_id = int(raw_id)
+        except (TypeError, ValueError):
+            logger.warning("Некорректный id в ответе: %s", raw_id)
+            continue
         source = posts_by_id.get(post_id)
         if not source:
             continue
@@ -118,7 +126,12 @@ def analyze_posts(posts: List[RawPost], config: Config) -> List[VacancyNormalize
         if config.llm_temperature is not None:
             body["temperature"] = config.llm_temperature
         logger.info("Отправка батча в LLM: %s постов", len(batch))
-        response = requests.post(url, headers=headers, json=body, timeout=60)
+        try:
+            response = requests.post(url, headers=headers, json=body, timeout=config.llm_timeout)
+            response.raise_for_status()
+        except requests.Timeout as exc:
+            logger.error("LLM timeout after %s seconds: %s", config.llm_timeout, exc)
+            continue
         try:
             response.raise_for_status()
         except requests.HTTPError as exc:
@@ -129,7 +142,7 @@ def analyze_posts(posts: List[RawPost], config: Config) -> List[VacancyNormalize
                 body,
                 response.text,
             )
-            raise
+            continue
         content = response.json()
         message_content = content.get("choices", [{}])[0].get("message", {}).get("content", "")
         all_results.extend(_parse_batch_response(message_content, batch))

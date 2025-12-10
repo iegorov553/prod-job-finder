@@ -24,6 +24,8 @@ LLM_MODEL_NAME=gpt-4.1-mini
 LLM_BASE_URL=https://api.openai.com/v1
 # Optional: temperature (leave empty to use provider default)
 # LLM_TEMPERATURE=
+# Optional: timeout to LLM in seconds (default 60)
+# LLM_TIMEOUT=60
 MAX_POSTS_PER_BATCH=10
 HOURS_LOOKBACK=24
 STATE_PATH=state.json

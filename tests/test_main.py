@@ -42,6 +42,7 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
         llm_model_name="model",
         llm_base_url="https://example.com/v1",
         llm_temperature=None,
+        llm_timeout=60,
         max_posts_per_batch=10,
         hours_lookback=24,
         state_path=tmp_path / "state.json",

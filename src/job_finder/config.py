@@ -23,6 +23,7 @@ class Config:
     llm_model_name: str
     llm_base_url: str
     llm_temperature: float | None
+    llm_timeout: int
 
     max_posts_per_batch: int
     hours_lookback: int
@@ -58,6 +59,7 @@ def load_config(env_path: str | None = ".env") -> Config:
     llm_base_url = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1")
     llm_temperature = os.environ.get("LLM_TEMPERATURE")
     temperature_value = float(llm_temperature) if llm_temperature not in (None, "") else None
+    llm_timeout = int(os.environ.get("LLM_TIMEOUT", "60"))
 
     max_posts_per_batch = int(os.environ.get("MAX_POSTS_PER_BATCH", "10"))
     hours_lookback = int(os.environ.get("HOURS_LOOKBACK", "24"))
@@ -75,6 +77,7 @@ def load_config(env_path: str | None = ".env") -> Config:
         llm_model_name=llm_model_name,
         llm_base_url=llm_base_url,
         llm_temperature=temperature_value,
+        llm_timeout=llm_timeout,
         max_posts_per_batch=max_posts_per_batch,
         hours_lookback=hours_lookback,
         state_path=state_path,

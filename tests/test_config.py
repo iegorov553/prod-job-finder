@@ -13,6 +13,7 @@ def test_load_config_parses_env(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("TELEGRAM_CHANNELS", "@a,@b , @c")
     monkeypatch.setenv("TELEGRAM_SESSION_BASE64", "c2Vzc2lvbg==")
     monkeypatch.setenv("TELEGRAM_STRING_SESSION", "STRING")
+    monkeypatch.setenv("LLM_TIMEOUT", "90")
     monkeypatch.setenv("LLM_TEMPERATURE", "0.2")
     monkeypatch.setenv("STATE_PATH", str(tmp_path / "state.json"))
     config = load_config(env_path=None)
@@ -22,6 +23,7 @@ def test_load_config_parses_env(monkeypatch, tmp_path: Path) -> None:
     assert config.telegram_session_base64 == "c2Vzc2lvbg=="
     assert config.telegram_string_session == "STRING"
     assert config.llm_temperature == 0.2
+    assert config.llm_timeout == 90
     assert config.state_path == tmp_path / "state.json"
 
 
