@@ -41,6 +41,7 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
         llm_api_key="key",
         llm_model_name="model",
         llm_base_url="https://example.com/v1",
+        llm_temperature=None,
         max_posts_per_batch=10,
         hours_lookback=24,
         state_path=tmp_path / "state.json",
@@ -49,7 +50,7 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
 
     dummy_client = DummyClient()
 
-    def fake_create_client(api_id, api_hash, session):
+    def fake_create_client(api_id, api_hash, session, string_session=None):
         return dummy_client
 
     async def fake_fetch_new_posts(client, channels, state_obj, hours_lookback):
@@ -108,7 +109,7 @@ def test_ensure_session_file(tmp_path) -> None:
     encoded = base64.b64encode(session_bytes).decode()
     session_name = "telegram_session"
     # run helper
-    main_module._ensure_session_file(session_name, encoded, tmp_path)
+    main_module._ensure_session_file(session_name, encoded, None, tmp_path)
     session_path = tmp_path / f"{session_name}.session"
     assert session_path.exists()
     assert session_path.read_bytes() == session_bytes

@@ -31,6 +31,7 @@ def _config(tmp_path) -> Config:
         llm_api_key="key",
         llm_model_name="model",
         llm_base_url="https://example.com/v1",
+        llm_temperature=None,
         max_posts_per_batch=10,
         hours_lookback=24,
         state_path=tmp_path / "state.json",

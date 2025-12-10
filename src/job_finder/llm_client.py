@@ -114,8 +114,9 @@ def analyze_posts(posts: List[RawPost], config: Config) -> List[VacancyNormalize
                 {"role": "system", "content": _system_prompt()},
                 {"role": "user", "content": user_payload},
             ],
-            "temperature": 0.2,
         }
+        if config.llm_temperature is not None:
+            body["temperature"] = config.llm_temperature
         logger.info("Отправка батча в LLM: %s постов", len(batch))
         response = requests.post(url, headers=headers, json=body, timeout=60)
         try:

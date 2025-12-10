@@ -22,6 +22,7 @@ class Config:
     llm_api_key: str
     llm_model_name: str
     llm_base_url: str
+    llm_temperature: float | None
 
     max_posts_per_batch: int
     hours_lookback: int
@@ -55,6 +56,8 @@ def load_config(env_path: str | None = ".env") -> Config:
         raise ValueError("LLM_API_KEY is required")
     llm_model_name = os.environ.get("LLM_MODEL_NAME", "gpt-4.1-mini")
     llm_base_url = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1")
+    llm_temperature = os.environ.get("LLM_TEMPERATURE")
+    temperature_value = float(llm_temperature) if llm_temperature not in (None, "") else None
 
     max_posts_per_batch = int(os.environ.get("MAX_POSTS_PER_BATCH", "10"))
     hours_lookback = int(os.environ.get("HOURS_LOOKBACK", "24"))
@@ -71,6 +74,7 @@ def load_config(env_path: str | None = ".env") -> Config:
         llm_api_key=llm_api_key,
         llm_model_name=llm_model_name,
         llm_base_url=llm_base_url,
+        llm_temperature=temperature_value,
         max_posts_per_batch=max_posts_per_batch,
         hours_lookback=hours_lookback,
         state_path=state_path,

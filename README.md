@@ -22,6 +22,8 @@ TELEGRAM_CHANNELS=@channel1,@channel2
 LLM_API_KEY=...
 LLM_MODEL_NAME=gpt-4.1-mini
 LLM_BASE_URL=https://api.openai.com/v1
+# Optional: temperature (leave empty to use provider default)
+# LLM_TEMPERATURE=
 MAX_POSTS_PER_BATCH=10
 HOURS_LOOKBACK=24
 STATE_PATH=state.json
