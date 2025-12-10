@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Iterable, List, Sequence
 
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 from telethon.tl.custom.message import Message
 
 from job_finder.models import RawPost
@@ -14,7 +15,14 @@ from job_finder.state import State
 URL_PATTERN = re.compile(r"https?://\S+")
 
 
-def create_client(api_id: int, api_hash: str, session_name: str) -> TelegramClient:
+def create_client(
+    api_id: int,
+    api_hash: str,
+    session_name: str,
+    string_session: str | None = None,
+) -> TelegramClient:
+    if string_session:
+        return TelegramClient(StringSession(string_session), api_id, api_hash)
     return TelegramClient(session_name, api_id, api_hash)
 
 

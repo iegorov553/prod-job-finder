@@ -16,6 +16,8 @@ TELEGRAM_API_HASH=...
 TELEGRAM_SESSION=telegram_session
 # Optional for non-interactive setups: base64-encoded Telethon session file content
 # TELEGRAM_SESSION_BASE64=...
+# Optional alternative (shorter): Telethon StringSession
+# TELEGRAM_STRING_SESSION=...
 TELEGRAM_CHANNELS=@channel1,@channel2
 LLM_API_KEY=...
 LLM_MODEL_NAME=gpt-4.1-mini
@@ -51,7 +53,22 @@ The image uses Poetry to install deps; tests can run inside the same image.
 ## Deploy on Railway
 1. Push this repo to Railway (use `staging` branch; avoid `main`).
 2. Configure environment variables in project settings.
-   - For non-interactive login, create Telethon session locally once: run `python main.py`, complete Telegram code/password, then base64-encode the generated `TELEGRAM_SESSION.session` file (`base64 -w0 telegram_session.session`) and set `TELEGRAM_SESSION_BASE64`.
+   - For non-interactive login, create Telethon session locally once: run `PYTHONPATH=src python main.py`, complete Telegram code/password, then either:
+     - base64-encode the generated `TELEGRAM_SESSION.session` file (`base64 -w0 telegram_session.session`) and set `TELEGRAM_SESSION_BASE64`, or
+     - generate a short StringSession and set `TELEGRAM_STRING_SESSION` (preferred to avoid size limits):
+       ```
+       python - <<'PY'
+       from telethon.sync import TelegramClient
+       from telethon.sessions import StringSession
+       api_id = int("YOUR_API_ID")
+       api_hash = "YOUR_API_HASH"
+       client = TelegramClient("telegram_session", api_id, api_hash)
+       client.connect()
+       if not client.is_user_authorized():
+           raise SystemExit("Session not authorized; run main.py once to login.")
+       print(StringSession.save(client.session))
+       PY
+       ```
    - Alternatively, mount a persistent volume and place the `.session` file there under the configured `TELEGRAM_SESSION` name.
 3. Add a cron job that runs `python main.py` daily in the service image.
 

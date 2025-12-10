@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import base64
 import asyncio
 import logging
-import base64
 from pathlib import Path
 
 from job_finder import digest, llm_client, scraper, state
@@ -13,7 +13,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 
-def _ensure_session_file(session_name: str, session_base64: str | None, base_dir: Path) -> None:
+def _ensure_session_file(
+    session_name: str,
+    session_base64: str | None,
+    string_session: str | None,
+    base_dir: Path,
+) -> None:
+    if string_session:
+        # String session не требует файлового сохранения.
+        return
     session_path = base_dir / f"{session_name}.session"
     if session_path.exists():
         return
@@ -25,12 +33,18 @@ def _ensure_session_file(session_name: str, session_base64: str | None, base_dir
 
 
 async def _run_once(config: Config) -> None:
-    _ensure_session_file(config.telegram_session, config.telegram_session_base64, Path("."))
+    _ensure_session_file(
+        config.telegram_session,
+        config.telegram_session_base64,
+        config.telegram_string_session,
+        Path("."),
+    )
     current_state = state.load_state(config.state_path, config.telegram_channels)
     client = scraper.create_client(
         config.telegram_api_id,
         config.telegram_api_hash,
         config.telegram_session,
+        string_session=config.telegram_string_session,
     )
     async with client:
         await client.start()
