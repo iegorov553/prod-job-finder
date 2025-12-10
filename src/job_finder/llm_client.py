@@ -118,7 +118,17 @@ def analyze_posts(posts: List[RawPost], config: Config) -> List[VacancyNormalize
         }
         logger.info("Отправка батча в LLM: %s постов", len(batch))
         response = requests.post(url, headers=headers, json=body, timeout=60)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            logger.error(
+                "LLM request failed: %s | status=%s | body=%s | response=%s",
+                exc,
+                response.status_code,
+                body,
+                response.text,
+            )
+            raise
         content = response.json()
         message_content = content.get("choices", [{}])[0].get("message", {}).get("content", "")
         all_results.extend(_parse_batch_response(message_content, batch))
