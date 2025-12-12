@@ -29,6 +29,10 @@ class Config:
     hours_lookback: int
 
     state_path: Path
+    settings_path: Path
+
+    bot_token: str
+    allowed_user_ids: List[int]
 
 
 def _parse_channels(raw: str | None) -> List[str]:
@@ -36,6 +40,21 @@ def _parse_channels(raw: str | None) -> List[str]:
         return DEFAULT_CHANNELS.copy()
     channels = [item.strip() for item in raw.split(",") if item.strip()]
     return channels
+
+
+def _parse_int_list(raw: str | None) -> List[int]:
+    if not raw:
+        return []
+    items: List[int] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            items.append(int(part))
+        except ValueError:
+            continue
+    return items
 
 
 def load_config(env_path: str | None = ".env") -> Config:
@@ -65,6 +84,16 @@ def load_config(env_path: str | None = ".env") -> Config:
     hours_lookback = int(os.environ.get("HOURS_LOOKBACK", "24"))
 
     state_path = Path(os.environ.get("STATE_PATH", "state.json"))
+    settings_path = Path(os.environ.get("SETTINGS_PATH", "settings.json"))
+
+    bot_token = os.environ.get("BOT_TOKEN")
+    if not bot_token:
+        raise ValueError("BOT_TOKEN is required for control bot")
+    allowed_user_ids = _parse_int_list(
+        os.environ.get("ALLOW_USER_IDS") or os.environ.get("TELEGRAM_TARGET_USER_ID")
+    )
+    if not allowed_user_ids:
+        raise ValueError("ALLOW_USER_IDS or TELEGRAM_TARGET_USER_ID is required")
 
     return Config(
         telegram_api_id=telegram_api_id,
@@ -81,4 +110,7 @@ def load_config(env_path: str | None = ".env") -> Config:
         max_posts_per_batch=max_posts_per_batch,
         hours_lookback=hours_lookback,
         state_path=state_path,
+        settings_path=settings_path,
+        bot_token=bot_token,
+        allowed_user_ids=allowed_user_ids,
     )
