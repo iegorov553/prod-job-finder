@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import base64
 import asyncio
+import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from job_finder import digest, llm_client, scraper, state
-from job_finder.bot_control import BotController
+from job_finder.bot_control import BotController, RunResult
 from job_finder.config import Config, load_config
 from job_finder.resources import messages
 from job_finder.scheduler import PipelineScheduler
@@ -17,6 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 DIGEST_CACHE_PATH = Path("digest_last.md")
+LLM_LOG_DIR = Path("llm_logs")
 pipeline_lock = PipelineLock()
 scheduler = PipelineScheduler()
 
@@ -66,11 +69,16 @@ async def _run_once(config: Config, channels: list[str]) -> str:
             logger.info(messages.NO_NEW_MESSAGES)
             return messages.NO_NEW_MESSAGES
         logger.info("Получено %s новых сообщений", len(posts))
-        normalized = llm_client.analyze_posts(posts, config)
+        llm_logs: list[dict] = []
+        normalized = llm_client.analyze_posts(posts, config, logs=llm_logs)
         relevant = [item for item in normalized if item.is_relevant]
         logger.info("Релевантных вакансий: %s", len(relevant))
         digest_text = digest.build_digest(relevant)
         DIGEST_CACHE_PATH.write_text(digest_text)
+        if llm_logs:
+            LLM_LOG_DIR.mkdir(exist_ok=True)
+            log_path = LLM_LOG_DIR / f"llm_log_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+            log_path.write_text(json.dumps(llm_logs, ensure_ascii=False, indent=2))
         for channel in channels:
             last_id = scraper.get_max_message_id(posts, channel)
             if last_id is not None:
@@ -89,14 +97,21 @@ def main() -> None:
     settings = load_current_settings()
     save_settings(settings_path, settings)
 
-    async def run_pipeline_and_return() -> str:
+    async def run_pipeline_and_return() -> RunResult:
         current_settings = load_current_settings()
+        log_file: Path | None = None
         async with pipeline_lock.acquire():
             try:
-                return await _run_once(config, current_settings.channels)
+                result_text = await _run_once(config, current_settings.channels)
+                # pick latest log file if exists
+                if LLM_LOG_DIR.exists():
+                    log_files = sorted(LLM_LOG_DIR.glob("llm_log_*.json"), reverse=True)
+                    if log_files:
+                        log_file = log_files[0]
+                return RunResult(message=result_text, log_path=str(log_file) if log_file else None)
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Ошибка пайплайна: %s", exc)
-                return f"Ошибка пайплайна: {exc}"
+                return RunResult(message=f"Ошибка пайплайна: {exc}", log_path=None)
 
     def status_text() -> str:
         current_settings = load_current_settings()

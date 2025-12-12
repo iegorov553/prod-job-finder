@@ -1,4 +1,3 @@
-import asyncio
 import base64
 from types import SimpleNamespace
 from typing import List
@@ -69,7 +68,7 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
             )
         ]
 
-    def fake_analyze_posts(posts, config):
+    def fake_analyze_posts(posts, config, logs=None):
         return [
             VacancyNormalized(
                 id=1,
