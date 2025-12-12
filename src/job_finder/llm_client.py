@@ -56,6 +56,9 @@ def _parse_batch_response(
     response_text: str,
     posts: List[RawPost],
 ) -> List[VacancyNormalized]:
+    if not response_text:
+        logger.warning("%s: empty response", ERROR_PARSING_BATCH)
+        return []
     try:
         data = json.loads(response_text)
         if not isinstance(data, list):
@@ -169,8 +172,17 @@ def analyze_posts(
         message_content = ""
         if use_prompt_id:
             message_content = content.get("output_text", "")
+            if not message_content and isinstance(content.get("output"), list):
+                texts = [
+                    item.get("text", "")
+                    for item in content.get("output", [])
+                    if isinstance(item, dict) and item.get("type") == "output_text"
+                ]
+                message_content = "\n".join(t for t in texts if t)
         if not message_content:
             message_content = content.get("choices", [{}])[0].get("message", {}).get("content", "")
+        if not message_content:
+            message_content = response.text
         if logs is not None:
             logs.append(
                 {
@@ -178,5 +190,8 @@ def analyze_posts(
                     "response_text": message_content,
                 }
             )
+        if not message_content:
+            logger.warning("%s: empty message content", ERROR_PARSING_BATCH)
+            continue
         all_results.extend(_parse_batch_response(message_content, batch))
     return all_results
