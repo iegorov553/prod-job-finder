@@ -149,15 +149,16 @@ def main() -> None:
         get_digest=last_digest_text,
     )
 
-    scheduler.start()
-    scheduler.update(settings.scheduler, lambda: asyncio.create_task(run_pipeline_and_return()))
+    async def serve() -> None:
+        scheduler.start()
+        scheduler.update(settings.scheduler, lambda: asyncio.create_task(run_pipeline_and_return()))
+        try:
+            await bot.run_polling()
+        finally:
+            await bot.shutdown()
+            scheduler.stop()
 
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(bot.run_polling())
-    finally:
-        loop.run_until_complete(bot.shutdown())
-        scheduler.stop()
+    asyncio.run(serve())
 
 
 if __name__ == "__main__":
