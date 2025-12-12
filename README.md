@@ -19,6 +19,8 @@ TELEGRAM_SESSION=telegram_session
 # Optional alternative (shorter): Telethon StringSession
 # TELEGRAM_STRING_SESSION=...
 TELEGRAM_CHANNELS=@channel1,@channel2
+BOT_TOKEN=your_bot_token
+ALLOW_USER_IDS=123456789  # comma-separated user IDs allowed to control the bot
 LLM_API_KEY=...
 LLM_MODEL_NAME=gpt-4.1-mini
 LLM_BASE_URL=https://api.openai.com/v1
@@ -29,6 +31,7 @@ LLM_BASE_URL=https://api.openai.com/v1
 MAX_POSTS_PER_BATCH=10
 HOURS_LOOKBACK=24
 STATE_PATH=state.json
+SETTINGS_PATH=settings.json
 ```
 See `.env.example` for a ready template.
 
@@ -56,7 +59,7 @@ The image uses Poetry to install deps; tests can run inside the same image.
 
 ## Deploy on Railway
 1. Push this repo to Railway (use `staging` branch; avoid `main`).
-2. Configure environment variables in project settings.
+2. Configure environment variables in project settings (see above).
    - For non-interactive login, create Telethon session locally once: run `PYTHONPATH=src python main.py`, complete Telegram code/password, then either:
      - base64-encode the generated `TELEGRAM_SESSION.session` file (`base64 -w0 telegram_session.session`) and set `TELEGRAM_SESSION_BASE64`, or
      - generate a short StringSession and set `TELEGRAM_STRING_SESSION` (preferred to avoid size limits):
@@ -74,9 +77,10 @@ The image uses Poetry to install deps; tests can run inside the same image.
        PY
        ```
    - Alternatively, mount a persistent volume and place the `.session` file there under the configured `TELEGRAM_SESSION` name.
-3. Add a cron job that runs `python main.py` daily in the service image.
+3. Запускайте сервис как долгоживущий процесс (Bot API polling + Telethon). Не используйте Railway cron одновременно с внутренним расписанием.
 
 ## Notes
 - Channels are configurable via `TELEGRAM_CHANNELS`.
 - LLM endpoint/model are configurable via `LLM_BASE_URL` and `LLM_MODEL_NAME`.
 - State persists in `STATE_PATH` (JSON). Delete the file to rescan all messages.
+- Bot control settings persist in `SETTINGS_PATH`. Autostart schedule is configured via bot commands `/schedule_set HH:MM` (UTC) and `/schedule_off`.
