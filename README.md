@@ -6,7 +6,8 @@ Daily one-shot Telegram user-bot that fetches posts from specified channels, sen
 - Telethon user-bot: fetches new posts per channel, tracks `last_message_id`.
 - LLM filtering for a single Product Manager profile (middle/senior/lead, remote or Barcelona, EN/RU, ~100k+ USD).
 - Minimal state in `state.json`.
-- One run = full cycle (fetch → analyze → digest → send), suitable for Railway cron.
+- Bot API control bot: commands to view status, manage channels, trigger runs, and configure daily schedule.
+- One run = full cycle (fetch → analyze → digest → send); работает как долгоживущий сервис (polling Bot API) или ручной запуск.
 
 ## Configuration
 Populate environment variables (or `.env`):
@@ -39,9 +40,10 @@ See `.env.example` for a ready template.
 1. Install dependencies (Poetry recommended):
    - `poetry install` (installs main + dev tools) or `pip install -r requirements.txt`.
 2. Initialize Telethon session (first run will ask for Telegram code/password):
-   - `python main.py` and follow prompts to store the session file (`TELEGRAM_SESSION`).
-3. Run the bot once:
-   - `python main.py`
+   - `PYTHONPATH=src python main.py` and follow prompts to store the session file (`TELEGRAM_SESSION`).
+3. Control bot commands (in private chat with your Bot API bot):
+   - `/status`, `/channels`, `/channels_add @a @b`, `/channels_remove @a`, `/run`, `/digest`, `/schedule_set HH:MM` (UTC), `/schedule_off`.
+4. Service mode: run `PYTHONPATH=src python main.py` (keeps polling Bot API and Telethon).
 
 ## Testing & Quality
 - `ruff format .` then `ruff check .`
@@ -77,7 +79,7 @@ The image uses Poetry to install deps; tests can run inside the same image.
        PY
        ```
    - Alternatively, mount a persistent volume and place the `.session` file there under the configured `TELEGRAM_SESSION` name.
-3. Запускайте сервис как долгоживущий процесс (Bot API polling + Telethon). Не используйте Railway cron одновременно с внутренним расписанием.
+3. Запускайте сервис как долгоживущий процесс (Bot API polling + Telethon). Не используйте Railway cron одновременно с внутренним расписанием `/schedule_set`.
 
 ## Notes
 - Channels are configurable via `TELEGRAM_CHANNELS`.

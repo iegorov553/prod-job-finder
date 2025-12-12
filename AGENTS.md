@@ -23,7 +23,7 @@
 
 ## Project quick info
 - Purpose: daily Telegram user-bot that fetches job posts, uses an LLM to filter for a Product Manager profile, and sends one Markdown digest to Saved Messages.
-- Entry point: `main.py` (async flow via Telethon).
-- Key modules (src/job_finder): `config.py`, `state.py`, `scraper.py`, `llm_client.py`, `digest.py`, `models.py`, `resources/messages.py`.
-- State: `state.json` (configurable via `STATE_PATH`) storing `last_message_id` per channel.
+- Entry point: `main.py` (async flow via Telethon + Bot API control bot + scheduler).
+- Key modules (src/job_finder): `config.py`, `state.py`, `settings.py`, `scraper.py`, `llm_client.py`, `digest.py`, `scheduler.py`, `bot_control.py`, `utils/locks.py`, `models.py`, `resources/messages.py`.
+- State: `state.json` (configurable via `STATE_PATH`) storing `last_message_id` per channel; `settings.json` for channels/whitelist/schedule; `digest_last.md` caches the last digest.
 - Docs: see `README.md` (English) for setup, env vars, Railway usage; `.env.example` for configuration template; `Dockerfile` for production image.
