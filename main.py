@@ -81,8 +81,9 @@ async def _run_once(config: Config, channels: list[str]) -> str:
 
 def main() -> None:
     config = load_config()
-    settings = load_settings(config.settings_path, env_channels=config.telegram_channels)
-    save_settings(config.settings_path, settings)
+    settings_path = getattr(config, "settings_path", Path("settings.json"))
+    settings = load_settings(settings_path, env_channels=config.telegram_channels)
+    save_settings(settings_path, settings)
 
     async def run_pipeline_and_return() -> str:
         async with pipeline_lock.acquire():
@@ -121,7 +122,7 @@ def main() -> None:
     bot = BotController(
         token=config.bot_token,
         allowed_users=config.allowed_user_ids,
-        settings_path=config.settings_path,
+        settings_path=settings_path,
         on_run=run_pipeline_and_return,
         on_schedule_update=update_schedule,
         get_status=status_text,
