@@ -19,29 +19,25 @@ def pytest_configure(config):
         class _DummyApplication:
             def __init__(self):
                 self.handlers = []
+                self.running = False
 
             def add_handler(self, handler):
                 self.handlers.append(handler)
 
             async def initialize(self):
+                self.running = True
                 return None
 
             async def start(self):
+                self.running = True
                 return None
 
-            class updater:
-                @staticmethod
-                async def start_polling():
-                    return None
-
-                @staticmethod
-                async def stop():
-                    return None
-
-            async def stop(self):
+            async def run_polling(self):
+                self.running = True
                 return None
 
             async def shutdown(self):
+                self.running = False
                 return None
 
         class _DummyBuilder:

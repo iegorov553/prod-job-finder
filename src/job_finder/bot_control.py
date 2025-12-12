@@ -166,11 +166,7 @@ class BotController:
         await update.effective_chat.send_message(msg)
 
     async def run_polling(self) -> None:
-        await self.app.initialize()
-        await self.app.start()
-        await self.app.updater.start_polling()
+        await self.app.run_polling()
 
     async def shutdown(self) -> None:
-        await self.app.updater.stop()
-        await self.app.stop()
         await self.app.shutdown()
