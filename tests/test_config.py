@@ -15,6 +15,8 @@ def test_load_config_parses_env(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("TELEGRAM_STRING_SESSION", "STRING")
     monkeypatch.setenv("LLM_TIMEOUT", "90")
     monkeypatch.setenv("LLM_TEMPERATURE", "0.2")
+    monkeypatch.setenv("LLM_PROMPT_ID", "pmpt_123")
+    monkeypatch.setenv("LLM_PROMPT_VERSION", "2")
     monkeypatch.setenv("BOT_TOKEN", "token")
     monkeypatch.setenv("ALLOW_USER_IDS", "1,2")
     monkeypatch.setenv("STATE_PATH", str(tmp_path / "state.json"))
@@ -27,6 +29,8 @@ def test_load_config_parses_env(monkeypatch, tmp_path: Path) -> None:
     assert config.telegram_string_session == "STRING"
     assert config.llm_temperature == 0.2
     assert config.llm_timeout == 90
+    assert config.llm_prompt_id == "pmpt_123"
+    assert config.llm_prompt_version == "2"
     assert config.state_path == tmp_path / "state.json"
     assert config.settings_path == tmp_path / "settings.json"
     assert config.bot_token == "token"

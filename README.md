@@ -29,6 +29,9 @@ LLM_BASE_URL=https://api.openai.com/v1
 # LLM_TEMPERATURE=
 # Optional: timeout to LLM in seconds (default 60)
 # LLM_TIMEOUT=60
+# Optional: OpenAI Responses prompt id/version (if using hosted prompt)
+# LLM_PROMPT_ID=pmpt_xxx
+# LLM_PROMPT_VERSION=2
 MAX_POSTS_PER_BATCH=10
 HOURS_LOOKBACK=24
 STATE_PATH=state.json

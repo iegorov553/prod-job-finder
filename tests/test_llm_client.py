@@ -33,6 +33,8 @@ def _config(tmp_path) -> Config:
         llm_base_url="https://example.com/v1",
         llm_temperature=None,
         llm_timeout=60,
+        llm_prompt_id=None,
+        llm_prompt_version=None,
         max_posts_per_batch=10,
         hours_lookback=24,
         state_path=tmp_path / "state.json",
@@ -84,10 +86,12 @@ def test_analyze_posts_parses_response(monkeypatch, tmp_path) -> None:
         return DummyResponse(payload)
 
     monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
-    result = analyze_posts(posts, _config(tmp_path))
+    logs: List[dict] = []
+    result = analyze_posts(posts, _config(tmp_path), logs)
     assert len(result) == 1
     assert result[0].is_relevant is True
     assert result[0].salary_max_usd == 130000
+    assert logs, "Лог должен быть собран"
 
 
 def test_analyze_posts_handles_bad_json(monkeypatch, tmp_path) -> None:
@@ -107,5 +111,5 @@ def test_analyze_posts_handles_bad_json(monkeypatch, tmp_path) -> None:
         return DummyResponse(payload)
 
     monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
-    result = analyze_posts(posts, _config(tmp_path))
+    result = analyze_posts(posts, _config(tmp_path), [])
     assert result == []

@@ -105,26 +105,48 @@ def _parse_batch_response(
     return normalized_list
 
 
-def analyze_posts(posts: List[RawPost], config: Config) -> List[VacancyNormalized]:
+def analyze_posts(
+    posts: List[RawPost],
+    config: Config,
+    logs: List[dict] | None = None,
+) -> List[VacancyNormalized]:
     if not posts:
         return []
     all_results: List[VacancyNormalized] = []
     for batch in _chunk_posts(posts, config.max_posts_per_batch):
         user_payload = _build_user_payload(batch)
-        url = f"{config.llm_base_url.rstrip('/')}/chat/completions"
+        # If prompt_id provided, use Responses API; otherwise Chat Completions
+        use_prompt_id = bool(config.llm_prompt_id)
+        url = (
+            f"{config.llm_base_url.rstrip('/')}/responses"
+            if use_prompt_id
+            else f"{config.llm_base_url.rstrip('/')}/chat/completions"
+        )
         headers = {
             "Authorization": f"Bearer {config.llm_api_key}",
             "Content-Type": "application/json",
         }
-        body = {
-            "model": config.llm_model_name,
-            "messages": [
-                {"role": "system", "content": _system_prompt()},
-                {"role": "user", "content": user_payload},
-            ],
-        }
-        if config.llm_temperature is not None:
-            body["temperature"] = config.llm_temperature
+        if use_prompt_id:
+            body = {
+                "model": config.llm_model_name,
+                "prompt": {
+                    "id": config.llm_prompt_id,
+                    "version": config.llm_prompt_version,
+                },
+                "input": [{"role": "user", "content": user_payload}],
+            }
+            if config.llm_temperature is not None:
+                body["temperature"] = config.llm_temperature
+        else:
+            body = {
+                "model": config.llm_model_name,
+                "messages": [
+                    {"role": "system", "content": _system_prompt()},
+                    {"role": "user", "content": user_payload},
+                ],
+            }
+            if config.llm_temperature is not None:
+                body["temperature"] = config.llm_temperature
         logger.info("Отправка батча в LLM: %s постов", len(batch))
         try:
             response = requests.post(url, headers=headers, json=body, timeout=config.llm_timeout)
@@ -144,6 +166,17 @@ def analyze_posts(posts: List[RawPost], config: Config) -> List[VacancyNormalize
             )
             continue
         content = response.json()
-        message_content = content.get("choices", [{}])[0].get("message", {}).get("content", "")
+        message_content = ""
+        if use_prompt_id:
+            message_content = content.get("output_text", "")
+        if not message_content:
+            message_content = content.get("choices", [{}])[0].get("message", {}).get("content", "")
+        if logs is not None:
+            logs.append(
+                {
+                    "request": body,
+                    "response_text": message_content,
+                }
+            )
         all_results.extend(_parse_batch_response(message_content, batch))
     return all_results
