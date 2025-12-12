@@ -82,26 +82,34 @@ async def _run_once(config: Config, channels: list[str]) -> str:
 def main() -> None:
     config = load_config()
     settings_path = getattr(config, "settings_path", Path("settings.json"))
-    settings = load_settings(settings_path, env_channels=config.telegram_channels)
+
+    def load_current_settings():
+        return load_settings(settings_path, env_channels=config.telegram_channels)
+
+    settings = load_current_settings()
     save_settings(settings_path, settings)
 
     async def run_pipeline_and_return() -> str:
+        current_settings = load_current_settings()
         async with pipeline_lock.acquire():
             try:
-                return await _run_once(config, settings.channels)
+                return await _run_once(config, current_settings.channels)
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Ошибка пайплайна: %s", exc)
                 return f"Ошибка пайплайна: {exc}"
 
     def status_text() -> str:
-        st = state.load_state(config.state_path, settings.channels)
+        current_settings = load_current_settings()
+        st = state.load_state(config.state_path, current_settings.channels)
         lines = ["Статус:"]
-        lines.append(f"Каналы: {', '.join(settings.channels) if settings.channels else 'нет'}")
-        for ch in settings.channels:
+        lines.append(
+            f"Каналы: {', '.join(current_settings.channels) if current_settings.channels else 'нет'}"
+        )
+        for ch in current_settings.channels:
             last_id = st.get_last_message_id(ch)
             lines.append(f"{ch}: last_message_id={last_id}")
-        if settings.scheduler.enabled and settings.scheduler.time_utc:
-            lines.append(f"Автозапуск: ежедневно в {settings.scheduler.time_utc} UTC")
+        if current_settings.scheduler.enabled and current_settings.scheduler.time_utc:
+            lines.append(f"Автозапуск: ежедневно в {current_settings.scheduler.time_utc} UTC")
         else:
             lines.append("Автозапуск: выкл")
         return "\n".join(lines)
@@ -151,7 +159,10 @@ def main() -> None:
 
     async def serve() -> None:
         scheduler.start()
-        scheduler.update(settings.scheduler, lambda: asyncio.create_task(run_pipeline_and_return()))
+        scheduler.update(
+            load_current_settings().scheduler,
+            lambda: asyncio.create_task(run_pipeline_and_return()),
+        )
         try:
             await bot.run_polling()
         finally:
