@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+from dataclasses import dataclass
 from functools import partial
-from typing import Awaitable, Callable, List
+from typing import Awaitable, Callable, List, Optional
 
 from telegram import Update
 from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes
@@ -18,13 +20,19 @@ async def _unauthorized_reply(update: Update) -> None:
         await update.effective_chat.send_message("Access denied.")
 
 
+@dataclass
+class RunResult:
+    message: str
+    log_path: Optional[str] = None
+
+
 class BotController:
     def __init__(
         self,
         token: str,
         allowed_users: List[int],
         settings_path,
-        on_run: Callable[[], Awaitable[str]],
+        on_run: Callable[[], Awaitable[RunResult]],
         on_schedule_update: Callable[[SchedulerConfig], Awaitable[str]],
         get_status: Callable[[], str],
         get_digest: Callable[[], str],
@@ -123,7 +131,25 @@ class BotController:
             logger.exception("Ошибка ручного запуска: %s", exc)
             await update.effective_chat.send_message(f"Ошибка: {exc}")
             return
-        await update.effective_chat.send_message(result)
+        await update.effective_chat.send_message(result.message)
+        if result.log_path:
+            try:
+                size = os.path.getsize(result.log_path)
+                if size <= 20 * 1024 * 1024:
+                    with open(result.log_path, "rb") as fh:
+                        await update.effective_chat.send_document(
+                            document=fh,
+                            filename=os.path.basename(result.log_path),
+                            caption="Лог LLM",
+                        )
+                else:
+                    await update.effective_chat.send_message("Лог LLM >20MB, не отправлен.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Не удалось отправить лог: %s", exc)
+            try:
+                os.remove(result.log_path)
+            except OSError:
+                pass
 
     async def handle_digest(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_access(update):
