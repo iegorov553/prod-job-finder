@@ -169,8 +169,16 @@ class BotController:
         await self.app.initialize()
         await self.app.start()
         await self.app.updater.start_polling()
+        # Keep running until cancelled externally
+        stop_event = asyncio.Event()
+        try:
+            await stop_event.wait()
+        except asyncio.CancelledError:
+            pass
 
     async def shutdown(self) -> None:
-        await self.app.updater.stop()
-        await self.app.stop()
-        await self.app.shutdown()
+        try:
+            await self.app.updater.stop()
+            await self.app.stop()
+        finally:
+            await self.app.shutdown()
