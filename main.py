@@ -119,9 +119,29 @@ def main() -> None:
             else "Автозапуск выключен."
         )
 
+    # Fallbacks for old configs that might not include new fields
+    bot_token = getattr(config, "bot_token", None)
+    if bot_token is None:
+        import os
+        bot_token = os.environ.get("BOT_TOKEN")
+    allowed_user_ids = getattr(config, "allowed_user_ids", None)
+    if allowed_user_ids is None:
+        import os
+
+        raw_ids = os.environ.get("ALLOW_USER_IDS") or os.environ.get("TELEGRAM_TARGET_USER_ID")
+        allowed_user_ids = []
+        if raw_ids:
+            for part in raw_ids.split(","):
+                part = part.strip()
+                if part:
+                    try:
+                        allowed_user_ids.append(int(part))
+                    except ValueError:
+                        continue
+
     bot = BotController(
-        token=config.bot_token,
-        allowed_users=config.allowed_user_ids,
+        token=bot_token,
+        allowed_users=allowed_user_ids,
         settings_path=settings_path,
         on_run=run_pipeline_and_return,
         on_schedule_update=update_schedule,
