@@ -36,6 +36,9 @@ def _config(tmp_path) -> Config:
         max_posts_per_batch=10,
         hours_lookback=24,
         state_path=tmp_path / "state.json",
+        settings_path=tmp_path / "settings.json",
+        bot_token="token",
+        allowed_user_ids=[1],
     )
 
 

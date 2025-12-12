@@ -46,6 +46,9 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
         max_posts_per_batch=10,
         hours_lookback=24,
         state_path=tmp_path / "state.json",
+        settings_path=tmp_path / "settings.json",
+        bot_token="token",
+        allowed_user_ids=[1],
     )
     loaded_state = State(channels=[ChannelState(username="@a", last_message_id=None)])
 
@@ -100,8 +103,7 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
     monkeypatch.setattr(main_module.state, "load_state", lambda path, channels: loaded_state)
     monkeypatch.setattr(main_module.state, "save_state", fake_save_state)
 
-    await main_module._run_once(config)
-    assert dummy_client.sent, "Сообщение должно быть отправлено"
+    await main_module._run_once(config, ["@a"])
     assert saved_state["last"] == 1
 
 

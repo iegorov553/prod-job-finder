@@ -15,7 +15,10 @@ def test_load_config_parses_env(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("TELEGRAM_STRING_SESSION", "STRING")
     monkeypatch.setenv("LLM_TIMEOUT", "90")
     monkeypatch.setenv("LLM_TEMPERATURE", "0.2")
+    monkeypatch.setenv("BOT_TOKEN", "token")
+    monkeypatch.setenv("ALLOW_USER_IDS", "1,2")
     monkeypatch.setenv("STATE_PATH", str(tmp_path / "state.json"))
+    monkeypatch.setenv("SETTINGS_PATH", str(tmp_path / "settings.json"))
     config = load_config(env_path=None)
     assert config.telegram_api_id == 123
     assert config.telegram_api_hash == "hash"
@@ -25,6 +28,9 @@ def test_load_config_parses_env(monkeypatch, tmp_path: Path) -> None:
     assert config.llm_temperature == 0.2
     assert config.llm_timeout == 90
     assert config.state_path == tmp_path / "state.json"
+    assert config.settings_path == tmp_path / "settings.json"
+    assert config.bot_token == "token"
+    assert config.allowed_user_ids == [1, 2]
 
 
 def test_load_config_missing_vars(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -32,8 +38,11 @@ def test_load_config_missing_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TELEGRAM_API_ID", raising=False)
     monkeypatch.delenv("TELEGRAM_API_HASH", raising=False)
     monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("BOT_TOKEN", raising=False)
+    monkeypatch.delenv("ALLOW_USER_IDS", raising=False)
     monkeypatch.setenv("TELEGRAM_API_ID", "", prepend=False)
     monkeypatch.setenv("TELEGRAM_API_HASH", "", prepend=False)
     monkeypatch.setenv("LLM_API_KEY", "", prepend=False)
+    monkeypatch.setenv("BOT_TOKEN", "", prepend=False)
     with pytest.raises(ValueError):
         load_config(env_path=None)
