@@ -38,6 +38,7 @@ class BotController:
         get_status: Callable[[], str],
         get_digest: Callable[[], str],
         get_history: Callable[[], str],
+        history_file: str | None = None,
     ):
         self.allowed_users = allowed_users
         self.settings_path = settings_path
@@ -47,6 +48,7 @@ class BotController:
         self.get_status = get_status
         self.get_digest = get_digest
         self.get_history = get_history
+        self.history_file = history_file
         self.app: Application = ApplicationBuilder().token(token).build()
         self._register_handlers()
 
@@ -199,6 +201,20 @@ class BotController:
             return
         text = self.get_history() or "История пуста."
         await update.effective_chat.send_message(text)
+        if self.history_file:
+            try:
+                size = os.path.getsize(self.history_file)
+                if size <= 20 * 1024 * 1024:
+                    with open(self.history_file, "rb") as fh:
+                        await update.effective_chat.send_document(
+                            document=fh,
+                            filename=os.path.basename(self.history_file),
+                            caption="История релевантных вакансий",
+                        )
+                else:
+                    await update.effective_chat.send_message("История >20MB, не отправлена.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Не удалось отправить историю: %s", exc)
 
     async def handle_schedule(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_access(update):

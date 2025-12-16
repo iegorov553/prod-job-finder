@@ -250,6 +250,7 @@ def main() -> None:
         get_status=status_text,
         get_digest=last_digest_text,
         get_history=history_text,
+        history_file=str(relevant_log_path),
     )
 
     async def serve() -> None:
