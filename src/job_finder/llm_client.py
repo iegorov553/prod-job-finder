@@ -25,7 +25,6 @@ def _chunk_posts(posts: List[RawPost], size: int) -> Iterable[List[RawPost]]:
 
 def _build_user_payload(posts: List[RawPost]) -> str:
     payload = {
-        "instruction": "Analyze each Telegram post and return normalized vacancy data.",
         "posts": [
             {
                 "id": post.id,
@@ -60,11 +59,35 @@ def _parse_batch_response(
         logger.warning("%s: empty response", ERROR_PARSING_BATCH)
         return []
     try:
-        data = json.loads(response_text)
-        if not isinstance(data, list):
-            raise ValueError("Response is not a list")
+        parsed = json.loads(response_text)
     except Exception as exc:  # noqa: BLE001
         logger.warning("%s: %s", ERROR_PARSING_BATCH, exc)
+        return []
+
+    data = parsed
+    # If the parsed object is a dict (e.g., full response), try extracting output_text or output array
+    if isinstance(parsed, dict):
+        if "output_text" in parsed and isinstance(parsed["output_text"], str):
+            try:
+                data = json.loads(parsed["output_text"])
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("%s: %s", ERROR_PARSING_BATCH, exc)
+                return []
+        elif "output" in parsed and isinstance(parsed["output"], list):
+            texts = [
+                item.get("text", "")
+                for item in parsed["output"]
+                if isinstance(item, dict) and item.get("type") == "output_text"
+            ]
+            joined = "\n".join(t for t in texts if t)
+            try:
+                data = json.loads(joined)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("%s: %s", ERROR_PARSING_BATCH, exc)
+                return []
+
+    if not isinstance(data, list):
+        logger.warning("%s: response is not a list", ERROR_PARSING_BATCH)
         return []
 
     posts_by_id = {post.id: post for post in posts}
