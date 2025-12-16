@@ -155,6 +155,10 @@ def main() -> None:
                                             try:
                                                 batch_data = json.loads(batch["response_text"])
                                                 if isinstance(batch_data, list):
+                                                    # enrich with channel id if missing
+                                                    for item in batch_data:
+                                                        if isinstance(item, dict) and "source_channel" not in item:
+                                                            item["source_channel"] = ""
                                                     parsed_relevant.extend(batch_data)
                                             except Exception:
                                                 continue
