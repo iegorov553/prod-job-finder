@@ -37,6 +37,7 @@ class BotController:
         on_schedule_update: Callable[[SchedulerConfig], Awaitable[str]],
         get_status: Callable[[], str],
         get_digest: Callable[[], str],
+        get_history: Callable[[], str],
     ):
         self.allowed_users = allowed_users
         self.settings_path = settings_path
@@ -45,6 +46,7 @@ class BotController:
         self.on_schedule_update = on_schedule_update
         self.get_status = get_status
         self.get_digest = get_digest
+        self.get_history = get_history
         self.app: Application = ApplicationBuilder().token(token).build()
         self._register_handlers()
 
@@ -61,6 +63,7 @@ class BotController:
         self.app.add_handler(CommandHandler("run", self.handle_run))
         self.app.add_handler(CommandHandler("run_once", self.handle_run_once))
         self.app.add_handler(CommandHandler("digest", self.handle_digest))
+        self.app.add_handler(CommandHandler("history", self.handle_history))
         self.app.add_handler(CommandHandler("schedule", self.handle_schedule))
         self.app.add_handler(CommandHandler("schedule_set", self.handle_schedule_set))
         self.app.add_handler(CommandHandler("schedule_off", self.handle_schedule_off))
@@ -82,6 +85,7 @@ class BotController:
             "/channels_remove @a - убрать каналы\n"
             "/run - запустить сбор сейчас\n"
             "/run_once - тестовый сбор (до 5 постов, без обновления состояния)\n"
+            "/history - последние сохранённые релевантные вакансии\n"
             "/digest - показать последний дайджест\n"
             "/schedule - показать расписание\n"
             "/schedule_set HH:MM - ежедневный запуск по UTC\n"
@@ -189,6 +193,12 @@ class BotController:
         if not await self._ensure_access(update):
             return
         await update.effective_chat.send_message(self.get_digest() or "Дайджестов пока нет.")
+
+    async def handle_history(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._ensure_access(update):
+            return
+        text = self.get_history() or "История пуста."
+        await update.effective_chat.send_message(text)
 
     async def handle_schedule(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_access(update):

@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 DIGEST_CACHE_PATH = Path("digest_last.md")
 LLM_LOG_DIR = Path("llm_logs")
+RELEVANT_LOG_DEFAULT = Path("relevant_log.jsonl")
 pipeline_lock = PipelineLock()
 scheduler = PipelineScheduler()
 
@@ -96,6 +97,9 @@ async def _run_once(
                 if last_id is not None:
                     current_state.update_last_message_id(channel, last_id)
             state.save_state(config.state_path, current_state)
+        else:
+            # even in preview mode keep state as is
+            pass
         return digest_text
 
 
@@ -108,6 +112,19 @@ def main() -> None:
 
     settings = load_current_settings()
     save_settings(settings_path, settings)
+
+    relevant_log_path = getattr(config, "relevant_log_path", RELEVANT_LOG_DEFAULT)
+
+    def append_relevant(relevant_text: str, relevant_items: list[dict]) -> None:
+        relevant_log_path.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "count": len(relevant_items),
+            "items": relevant_items,
+            "digest": relevant_text,
+        }
+        with relevant_log_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     async def run_pipeline_and_return(
         update_state: bool = True, limit_posts: int | None = None
@@ -122,6 +139,29 @@ def main() -> None:
                     limit_posts=limit_posts,
                     update_state=update_state,
                 )
+                if result_text and result_text != messages.NO_NEW_MESSAGES:
+                    # Try to append relevant items parsed from last log (if any)
+                    parsed_relevant: list[dict] = []
+                    if LLM_LOG_DIR.exists():
+                        log_files = sorted(LLM_LOG_DIR.glob("llm_log_*.json"), reverse=True)
+                        if log_files:
+                            log_file = log_files[0]
+                            try:
+                                data = json.loads(log_file.read_text(encoding="utf-8"))
+                                if isinstance(data, list):
+                                    # Flatten normalized responses from the last batch
+                                    for batch in data:
+                                        if isinstance(batch, dict) and "response_text" in batch:
+                                            try:
+                                                batch_data = json.loads(batch["response_text"])
+                                                if isinstance(batch_data, list):
+                                                    parsed_relevant.extend(batch_data)
+                                            except Exception:
+                                                continue
+                            except Exception:
+                                pass
+                    if parsed_relevant:
+                        append_relevant(result_text, parsed_relevant)
                 # pick latest log file if exists
                 if LLM_LOG_DIR.exists():
                     log_files = sorted(LLM_LOG_DIR.glob("llm_log_*.json"), reverse=True)
@@ -152,6 +192,25 @@ def main() -> None:
         if DIGEST_CACHE_PATH.exists():
             return DIGEST_CACHE_PATH.read_text()
         return ""
+
+    def history_text(limit: int = 10) -> str:
+        if not relevant_log_path.exists():
+            return ""
+        lines = relevant_log_path.read_text(encoding="utf-8").splitlines()
+        lines = [ln for ln in lines if ln.strip()]
+        if not lines:
+            return ""
+        selected = lines[-limit:]
+        parts = []
+        for ln in selected:
+            try:
+                rec = json.loads(ln)
+                ts = rec.get("timestamp", "")
+                count = rec.get("count", 0)
+                parts.append(f"{ts}: {count} item(s)")
+            except Exception:
+                continue
+        return "\n".join(parts)
 
     async def update_schedule(cfg) -> str:
         scheduler.update(cfg, lambda: asyncio.create_task(run_pipeline_and_return()))
@@ -190,6 +249,7 @@ def main() -> None:
         on_schedule_update=update_schedule,
         get_status=status_text,
         get_digest=last_digest_text,
+        get_history=history_text,
     )
 
     async def serve() -> None:

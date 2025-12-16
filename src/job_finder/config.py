@@ -32,6 +32,7 @@ class Config:
 
     state_path: Path
     settings_path: Path
+    relevant_log_path: Path
 
     bot_token: str
     allowed_user_ids: List[int]
@@ -89,6 +90,7 @@ def load_config(env_path: str | None = ".env") -> Config:
 
     state_path = Path(os.environ.get("STATE_PATH", "state.json"))
     settings_path = Path(os.environ.get("SETTINGS_PATH", "settings.json"))
+    relevant_log_path = Path(os.environ.get("RELEVANT_LOG_PATH", "relevant_log.jsonl"))
 
     bot_token = os.environ.get("BOT_TOKEN")
     if not bot_token:
@@ -117,6 +119,7 @@ def load_config(env_path: str | None = ".env") -> Config:
         hours_lookback=hours_lookback,
         state_path=state_path,
         settings_path=settings_path,
+        relevant_log_path=relevant_log_path,
         bot_token=bot_token,
         allowed_user_ids=allowed_user_ids,
     )

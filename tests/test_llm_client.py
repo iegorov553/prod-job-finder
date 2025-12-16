@@ -39,6 +39,7 @@ def _config(tmp_path) -> Config:
         hours_lookback=24,
         state_path=tmp_path / "state.json",
         settings_path=tmp_path / "settings.json",
+        relevant_log_path=tmp_path / "rel.jsonl",
         bot_token="token",
         allowed_user_ids=[1],
     )

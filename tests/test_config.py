@@ -21,6 +21,7 @@ def test_load_config_parses_env(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("ALLOW_USER_IDS", "1,2")
     monkeypatch.setenv("STATE_PATH", str(tmp_path / "state.json"))
     monkeypatch.setenv("SETTINGS_PATH", str(tmp_path / "settings.json"))
+    monkeypatch.setenv("RELEVANT_LOG_PATH", str(tmp_path / "relevant.jsonl"))
     config = load_config(env_path=None)
     assert config.telegram_api_id == 123
     assert config.telegram_api_hash == "hash"
@@ -33,6 +34,7 @@ def test_load_config_parses_env(monkeypatch, tmp_path: Path) -> None:
     assert config.llm_prompt_version == "2"
     assert config.state_path == tmp_path / "state.json"
     assert config.settings_path == tmp_path / "settings.json"
+    assert config.relevant_log_path == tmp_path / "relevant.jsonl"
     assert config.bot_token == "token"
     assert config.allowed_user_ids == [1, 2]
 
