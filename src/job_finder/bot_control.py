@@ -33,6 +33,7 @@ class BotController:
         allowed_users: List[int],
         settings_path,
         on_run: Callable[[], Awaitable[RunResult]],
+        on_run_preview: Callable[[], Awaitable[RunResult]],
         on_schedule_update: Callable[[SchedulerConfig], Awaitable[str]],
         get_status: Callable[[], str],
         get_digest: Callable[[], str],
@@ -40,6 +41,7 @@ class BotController:
         self.allowed_users = allowed_users
         self.settings_path = settings_path
         self.on_run = on_run
+        self.on_run_preview = on_run_preview
         self.on_schedule_update = on_schedule_update
         self.get_status = get_status
         self.get_digest = get_digest
@@ -57,6 +59,7 @@ class BotController:
         self.app.add_handler(CommandHandler("channels_add", self.handle_channels_add))
         self.app.add_handler(CommandHandler("channels_remove", self.handle_channels_remove))
         self.app.add_handler(CommandHandler("run", self.handle_run))
+        self.app.add_handler(CommandHandler("run_once", self.handle_run_once))
         self.app.add_handler(CommandHandler("digest", self.handle_digest))
         self.app.add_handler(CommandHandler("schedule", self.handle_schedule))
         self.app.add_handler(CommandHandler("schedule_set", self.handle_schedule_set))
@@ -78,6 +81,7 @@ class BotController:
             "/channels_add @a @b - добавить каналы\n"
             "/channels_remove @a - убрать каналы\n"
             "/run - запустить сбор сейчас\n"
+            "/run_once - тестовый сбор (до 5 постов, без обновления состояния)\n"
             "/digest - показать последний дайджест\n"
             "/schedule - показать расписание\n"
             "/schedule_set HH:MM - ежедневный запуск по UTC\n"
@@ -129,6 +133,36 @@ class BotController:
             result = await self.on_run()
         except Exception as exc:  # noqa: BLE001
             logger.exception("Ошибка ручного запуска: %s", exc)
+            await update.effective_chat.send_message(f"Ошибка: {exc}")
+            return
+        await update.effective_chat.send_message(result.message)
+        if result.log_path:
+            try:
+                size = os.path.getsize(result.log_path)
+                if size <= 20 * 1024 * 1024:
+                    with open(result.log_path, "rb") as fh:
+                        await update.effective_chat.send_document(
+                            document=fh,
+                            filename=os.path.basename(result.log_path),
+                            caption="Лог LLM",
+                        )
+                else:
+                    await update.effective_chat.send_message("Лог LLM >20MB, не отправлен.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Не удалось отправить лог: %s", exc)
+            try:
+                os.remove(result.log_path)
+            except OSError:
+                pass
+
+    async def handle_run_once(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._ensure_access(update):
+            return
+        await update.effective_chat.send_message("Запускаю тестовый сбор (до 5 постов)...")
+        try:
+            result = await self.on_run_preview()
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Ошибка тестового запуска: %s", exc)
             await update.effective_chat.send_message(f"Ошибка: {exc}")
             return
         await update.effective_chat.send_message(result.message)

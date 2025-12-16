@@ -44,6 +44,15 @@ def _ensure_session_file(
 
 
 async def _run_once(config: Config, channels: list[str]) -> str:
+    return await _run_once(config, channels, limit_posts=None, update_state=True)
+
+
+async def _run_once(
+    config: Config,
+    channels: list[str],
+    limit_posts: int | None = None,
+    update_state: bool = True,
+) -> str:
     _ensure_session_file(
         config.telegram_session,
         config.telegram_session_base64,
@@ -65,6 +74,8 @@ async def _run_once(config: Config, channels: list[str]) -> str:
             current_state,
             hours_lookback=config.hours_lookback,
         )
+        if limit_posts is not None:
+            posts = posts[:limit_posts]
         if not posts:
             logger.info(messages.NO_NEW_MESSAGES)
             return messages.NO_NEW_MESSAGES
@@ -79,11 +90,12 @@ async def _run_once(config: Config, channels: list[str]) -> str:
             LLM_LOG_DIR.mkdir(exist_ok=True)
             log_path = LLM_LOG_DIR / f"llm_log_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
             log_path.write_text(json.dumps(llm_logs, ensure_ascii=False, indent=2))
-        for channel in channels:
-            last_id = scraper.get_max_message_id(posts, channel)
-            if last_id is not None:
-                current_state.update_last_message_id(channel, last_id)
-        state.save_state(config.state_path, current_state)
+        if update_state:
+            for channel in channels:
+                last_id = scraper.get_max_message_id(posts, channel)
+                if last_id is not None:
+                    current_state.update_last_message_id(channel, last_id)
+            state.save_state(config.state_path, current_state)
         return digest_text
 
 
@@ -97,12 +109,19 @@ def main() -> None:
     settings = load_current_settings()
     save_settings(settings_path, settings)
 
-    async def run_pipeline_and_return() -> RunResult:
+    async def run_pipeline_and_return(
+        update_state: bool = True, limit_posts: int | None = None
+    ) -> RunResult:
         current_settings = load_current_settings()
         log_file: Path | None = None
         async with pipeline_lock.acquire():
             try:
-                result_text = await _run_once(config, current_settings.channels)
+                result_text = await _run_once(
+                    config,
+                    current_settings.channels,
+                    limit_posts=limit_posts,
+                    update_state=update_state,
+                )
                 # pick latest log file if exists
                 if LLM_LOG_DIR.exists():
                     log_files = sorted(LLM_LOG_DIR.glob("llm_log_*.json"), reverse=True)
@@ -166,7 +185,8 @@ def main() -> None:
         token=bot_token,
         allowed_users=allowed_user_ids,
         settings_path=settings_path,
-        on_run=run_pipeline_and_return,
+        on_run=lambda: run_pipeline_and_return(update_state=True, limit_posts=None),
+        on_run_preview=lambda: run_pipeline_and_return(update_state=False, limit_posts=5),
         on_schedule_update=update_schedule,
         get_status=status_text,
         get_digest=last_digest_text,
