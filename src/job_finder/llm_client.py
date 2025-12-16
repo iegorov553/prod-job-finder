@@ -51,6 +51,27 @@ def _map_remote_type(value: str | None) -> RemoteType:
     return "unknown"
 
 
+def _extract_output_text_from_response(content: dict) -> str:
+    # Try common fields from Responses API
+    if "output_text" in content and isinstance(content["output_text"], str):
+        return content["output_text"]
+    # Try nested output -> message -> content -> output_text
+    outputs = content.get("output")
+    texts: list[str] = []
+    if isinstance(outputs, list):
+        for item in outputs:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") != "message":
+                continue
+            for piece in item.get("content", []):
+                if isinstance(piece, dict) and piece.get("type") == "output_text":
+                    text_val = piece.get("text", "")
+                    if text_val:
+                        texts.append(text_val)
+    return "\n".join(t for t in texts if t)
+
+
 def _parse_batch_response(
     response_text: str,
     posts: List[RawPost],
@@ -194,14 +215,7 @@ def analyze_posts(
         content = response.json()
         message_content = ""
         if use_prompt_id:
-            message_content = content.get("output_text", "")
-            if not message_content and isinstance(content.get("output"), list):
-                texts = [
-                    item.get("text", "")
-                    for item in content.get("output", [])
-                    if isinstance(item, dict) and item.get("type") == "output_text"
-                ]
-                message_content = "\n".join(t for t in texts if t)
+            message_content = _extract_output_text_from_response(content)
         if not message_content:
             message_content = content.get("choices", [{}])[0].get("message", {}).get("content", "")
         if not message_content:
