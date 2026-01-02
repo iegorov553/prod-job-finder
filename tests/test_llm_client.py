@@ -12,6 +12,8 @@ from job_finder.models import RawPost
 class DummyResponse:
     def __init__(self, payload: Dict[str, Any]):
         self._payload = payload
+        self.status_code = 200
+        self.text = json.dumps(payload)
 
     def raise_for_status(self) -> None:
         return None
@@ -35,6 +37,8 @@ def _config(tmp_path) -> Config:
         llm_timeout=60,
         llm_prompt_id=None,
         llm_prompt_version=None,
+        llm_retry_max=2,
+        llm_retry_backoff=2.0,
         max_posts_per_batch=10,
         hours_lookback=24,
         state_path=tmp_path / "state.json",
