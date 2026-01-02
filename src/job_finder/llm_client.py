@@ -197,7 +197,9 @@ def analyze_posts(
                 body["temperature"] = config.llm_temperature
         logger.info("Отправка батча в LLM: %s постов", len(batch))
         response = None
-        for attempt in range(config.llm_retry_max + 1):
+        retry_max = getattr(config, "llm_retry_max", 0)
+        retry_backoff = getattr(config, "llm_retry_backoff", 2.0)
+        for attempt in range(retry_max + 1):
             try:
                 response = requests.post(url, headers=headers, json=body, timeout=config.llm_timeout)
                 response.raise_for_status()
@@ -213,8 +215,8 @@ def analyze_posts(
                     body,
                     response.text if response is not None else "",
                 )
-                if status in {429, 500, 502, 503, 504} and attempt < config.llm_retry_max:
-                    backoff = config.llm_retry_backoff * (2**attempt)
+                if status in {429, 500, 502, 503, 504} and attempt < retry_max:
+                    backoff = retry_backoff * (2**attempt)
                     logger.info("Повтор через %.1f сек (attempt %s)", backoff, attempt + 1)
                     time.sleep(backoff)
                     continue
