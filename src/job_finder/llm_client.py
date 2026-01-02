@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Iterable, List
 
 import requests
@@ -195,22 +196,30 @@ def analyze_posts(
             if config.llm_temperature is not None:
                 body["temperature"] = config.llm_temperature
         logger.info("Отправка батча в LLM: %s постов", len(batch))
-        try:
-            response = requests.post(url, headers=headers, json=body, timeout=config.llm_timeout)
-            response.raise_for_status()
-        except requests.Timeout as exc:
-            logger.error("LLM timeout after %s seconds: %s", config.llm_timeout, exc)
-            continue
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as exc:
-            logger.error(
-                "LLM request failed: %s | status=%s | body=%s | response=%s",
-                exc,
-                response.status_code,
-                body,
-                response.text,
-            )
+        response = None
+        for attempt in range(config.llm_retry_max + 1):
+            try:
+                response = requests.post(url, headers=headers, json=body, timeout=config.llm_timeout)
+                response.raise_for_status()
+                break
+            except requests.Timeout as exc:
+                logger.error("LLM timeout after %s seconds: %s", config.llm_timeout, exc)
+            except requests.HTTPError as exc:
+                status = response.status_code if response is not None else None
+                logger.error(
+                    "LLM request failed: %s | status=%s | body=%s | response=%s",
+                    exc,
+                    status,
+                    body,
+                    response.text if response is not None else "",
+                )
+                if status in {429, 500, 502, 503, 504} and attempt < config.llm_retry_max:
+                    backoff = config.llm_retry_backoff * (2**attempt)
+                    logger.info("Повтор через %.1f сек (attempt %s)", backoff, attempt + 1)
+                    time.sleep(backoff)
+                    continue
+            break
+        if response is None or response.status_code >= 400:
             continue
         content = response.json()
         message_content = ""
@@ -220,15 +229,25 @@ def analyze_posts(
             message_content = content.get("choices", [{}])[0].get("message", {}).get("content", "")
         if not message_content:
             message_content = response.text
+        if not message_content:
+            logger.warning("%s: empty message content", ERROR_PARSING_BATCH)
+            if logs is not None:
+                logs.append(
+                    {
+                        "request": body,
+                        "response_text": message_content,
+                        "parsed_ok": False,
+                    }
+                )
+            continue
+        parsed = _parse_batch_response(message_content, batch)
         if logs is not None:
             logs.append(
                 {
                     "request": body,
                     "response_text": message_content,
+                    "parsed_ok": bool(parsed),
                 }
             )
-        if not message_content:
-            logger.warning("%s: empty message content", ERROR_PARSING_BATCH)
-            continue
-        all_results.extend(_parse_batch_response(message_content, batch))
+        all_results.extend(parsed)
     return all_results

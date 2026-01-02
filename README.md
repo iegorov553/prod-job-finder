@@ -29,6 +29,9 @@ LLM_BASE_URL=https://api.openai.com/v1
 # LLM_TEMPERATURE=
 # Optional: timeout to LLM in seconds (default 60)
 # LLM_TIMEOUT=60
+# Optional: retries/backoff on 429/5xx (default max=2, backoff=2.0)
+# LLM_RETRY_MAX=2
+# LLM_RETRY_BACKOFF=2.0
 # Optional: OpenAI Responses prompt id/version (if using hosted prompt)
 # LLM_PROMPT_ID=pmpt_xxx
 # LLM_PROMPT_VERSION=2
@@ -89,3 +92,4 @@ The image uses Poetry to install deps; tests can run inside the same image.
 - LLM endpoint/model are configurable via `LLM_BASE_URL` and `LLM_MODEL_NAME`.
 - State persists in `STATE_PATH` (JSON). Delete the file to rescan all messages.
 - Bot control settings persist in `SETTINGS_PATH`. Autostart schedule is configured via bot commands `/schedule_set HH:MM` (UTC) and `/schedule_off`.
+- If LLM returns invalid/empty JSON for all batches, state is not updated and you will see a "rate limit or parse error" message.

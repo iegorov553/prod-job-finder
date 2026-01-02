@@ -83,6 +83,9 @@ async def _run_once(
         logger.info("Получено %s новых сообщений", len(posts))
         llm_logs: list[dict] = []
         normalized = llm_client.analyze_posts(posts, config, logs=llm_logs)
+        if llm_logs and not any(item.get("parsed_ok") for item in llm_logs if isinstance(item, dict)):
+            logger.warning("LLM не вернул валидные результаты; состояние не обновляем.")
+            return "LLM rate limit or parse error. Please try again later."
         relevant = [item for item in normalized if item.is_relevant]
         logger.info("Релевантных вакансий: %s", len(relevant))
         digest_text = digest.build_digest(relevant)
