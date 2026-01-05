@@ -75,8 +75,8 @@ async def _run_once(
             current_state,
             hours_lookback=config.hours_lookback,
         )
-        if limit_posts is not None:
-            posts = posts[:limit_posts]
+        effective_limit = limit_posts if limit_posts is not None else config.max_posts_per_run
+        posts = posts[:effective_limit]
         if not posts:
             logger.info(messages.NO_NEW_MESSAGES)
             return messages.NO_NEW_MESSAGES

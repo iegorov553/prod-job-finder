@@ -40,6 +40,7 @@ def _config(tmp_path) -> Config:
         llm_retry_max=2,
         llm_retry_backoff=2.0,
         max_posts_per_batch=10,
+        max_posts_per_run=30,
         hours_lookback=24,
         state_path=tmp_path / "state.json",
         settings_path=tmp_path / "settings.json",

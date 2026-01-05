@@ -26,8 +26,11 @@ class Config:
     llm_timeout: int
     llm_prompt_id: str | None
     llm_prompt_version: str | None
+    llm_retry_max: int
+    llm_retry_backoff: float
 
     max_posts_per_batch: int
+    max_posts_per_run: int
     hours_lookback: int
 
     state_path: Path
@@ -84,8 +87,11 @@ def load_config(env_path: str | None = ".env") -> Config:
     llm_timeout = int(os.environ.get("LLM_TIMEOUT", "60"))
     llm_prompt_id = os.environ.get("LLM_PROMPT_ID")
     llm_prompt_version = os.environ.get("LLM_PROMPT_VERSION")
+    llm_retry_max = int(os.environ.get("LLM_RETRY_MAX", "2"))
+    llm_retry_backoff = float(os.environ.get("LLM_RETRY_BACKOFF", "2.0"))
 
     max_posts_per_batch = int(os.environ.get("MAX_POSTS_PER_BATCH", "10"))
+    max_posts_per_run = int(os.environ.get("MAX_POSTS_PER_RUN", "30"))
     hours_lookback = int(os.environ.get("HOURS_LOOKBACK", "24"))
 
     state_path = Path(os.environ.get("STATE_PATH", "state.json"))
@@ -115,7 +121,10 @@ def load_config(env_path: str | None = ".env") -> Config:
         llm_timeout=llm_timeout,
         llm_prompt_id=llm_prompt_id,
         llm_prompt_version=llm_prompt_version,
+        llm_retry_max=llm_retry_max,
+        llm_retry_backoff=llm_retry_backoff,
         max_posts_per_batch=max_posts_per_batch,
+        max_posts_per_run=max_posts_per_run,
         hours_lookback=hours_lookback,
         state_path=state_path,
         settings_path=settings_path,
