@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 import os
 from dataclasses import dataclass
@@ -76,6 +77,14 @@ class BotController:
             return False
         return True
 
+    async def _send_text_or_file(self, chat, text: str, filename: str, caption: str) -> None:
+        if len(text) <= 3500:
+            await chat.send_message(text)
+            return
+        with io.BytesIO(text.encode("utf-8")) as fh:
+            fh.name = filename
+            await chat.send_document(document=fh, filename=filename, caption=caption)
+
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_access(update):
             return
@@ -98,7 +107,12 @@ class BotController:
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_access(update):
             return
-        await update.effective_chat.send_message(self.get_status())
+        await self._send_text_or_file(
+            update.effective_chat,
+            self.get_status(),
+            "status.txt",
+            "Статус",
+        )
 
     async def handle_channels(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_access(update):
@@ -194,13 +208,24 @@ class BotController:
     async def handle_digest(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_access(update):
             return
-        await update.effective_chat.send_message(self.get_digest() or "Дайджестов пока нет.")
+        digest_text = self.get_digest() or "Дайджестов пока нет."
+        await self._send_text_or_file(
+            update.effective_chat,
+            digest_text,
+            "digest.md",
+            "Дайджест",
+        )
 
     async def handle_history(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._ensure_access(update):
             return
         text = self.get_history() or "История пуста."
-        await update.effective_chat.send_message(text)
+        await self._send_text_or_file(
+            update.effective_chat,
+            text,
+            "history.txt",
+            "История",
+        )
         if self.history_file:
             try:
                 size = os.path.getsize(self.history_file)
