@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Iterable, List
+from typing import Callable, Iterable, List
 
 import requests
 
@@ -157,10 +157,13 @@ def analyze_posts(
     posts: List[RawPost],
     config: Config,
     logs: List[dict] | None = None,
+    progress_cb: Callable[[int, int], None] | None = None,
 ) -> List[VacancyNormalized]:
     if not posts:
         return []
     all_results: List[VacancyNormalized] = []
+    processed = 0
+    total = len(posts)
     for batch in _chunk_posts(posts, config.max_posts_per_batch):
         user_payload = _build_user_payload(batch)
         # If prompt_id provided, use Responses API; otherwise Chat Completions
@@ -252,4 +255,7 @@ def analyze_posts(
                 }
             )
         all_results.extend(parsed)
+        processed += len(batch)
+        if progress_cb is not None:
+            progress_cb(processed, total)
     return all_results

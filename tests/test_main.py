@@ -74,7 +74,7 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
             )
         ]
 
-    def fake_analyze_posts(posts, config, logs=None):
+    def fake_analyze_posts(posts, config, logs=None, progress_cb=None):
         return [
             VacancyNormalized(
                 id=1,

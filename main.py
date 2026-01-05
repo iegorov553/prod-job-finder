@@ -6,6 +6,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from job_finder import digest, llm_client, scraper, state
 from job_finder.bot_control import BotController, RunResult
@@ -53,6 +54,7 @@ async def _run_once(
     channels: list[str],
     limit_posts: int | None = None,
     update_state: bool = True,
+    progress_cb: Callable[[int, int], None] | None = None,
 ) -> str:
     _ensure_session_file(
         config.telegram_session,
@@ -82,7 +84,12 @@ async def _run_once(
             return messages.NO_NEW_MESSAGES
         logger.info("Получено %s новых сообщений", len(posts))
         llm_logs: list[dict] = []
-        normalized = llm_client.analyze_posts(posts, config, logs=llm_logs)
+        normalized = llm_client.analyze_posts(
+            posts,
+            config,
+            logs=llm_logs,
+            progress_cb=progress_cb,
+        )
         if llm_logs and not any(item.get("parsed_ok") for item in llm_logs if isinstance(item, dict)):
             logger.warning("LLM не вернул валидные результаты; состояние не обновляем.")
             return "LLM rate limit or parse error. Please try again later."
@@ -130,7 +137,9 @@ def main() -> None:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     async def run_pipeline_and_return(
-        update_state: bool = True, limit_posts: int | None = None
+        update_state: bool = True,
+        limit_posts: int | None = None,
+        progress_cb: Callable[[int, int], None] | None = None,
     ) -> RunResult:
         current_settings = load_current_settings()
         log_file: Path | None = None
@@ -141,6 +150,7 @@ def main() -> None:
                     current_settings.channels,
                     limit_posts=limit_posts,
                     update_state=update_state,
+                    progress_cb=progress_cb,
                 )
                 if result_text and result_text != messages.NO_NEW_MESSAGES:
                     # Try to append relevant items parsed from last log (if any)
@@ -251,8 +261,12 @@ def main() -> None:
         token=bot_token,
         allowed_users=allowed_user_ids,
         settings_path=settings_path,
-        on_run=lambda: run_pipeline_and_return(update_state=True, limit_posts=None),
-        on_run_preview=lambda: run_pipeline_and_return(update_state=False, limit_posts=5),
+        on_run=lambda progress_cb: run_pipeline_and_return(
+            update_state=True, limit_posts=None, progress_cb=progress_cb
+        ),
+        on_run_preview=lambda progress_cb: run_pipeline_and_return(
+            update_state=False, limit_posts=5, progress_cb=progress_cb
+        ),
         on_schedule_update=update_schedule,
         get_status=status_text,
         get_digest=last_digest_text,

@@ -33,8 +33,8 @@ class BotController:
         token: str,
         allowed_users: List[int],
         settings_path,
-        on_run: Callable[[], Awaitable[RunResult]],
-        on_run_preview: Callable[[], Awaitable[RunResult]],
+        on_run: Callable[[Callable[[int, int], None]], Awaitable[RunResult]],
+        on_run_preview: Callable[[Callable[[int, int], None]], Awaitable[RunResult]],
         on_schedule_update: Callable[[SchedulerConfig], Awaitable[str]],
         get_status: Callable[[], str],
         get_digest: Callable[[], str],
@@ -149,8 +149,17 @@ class BotController:
         if not await self._ensure_access(update):
             return
         await update.effective_chat.send_message("Запускаю сбор...")
+        last_report = {"count": 0}
+
+        def progress_cb(done: int, total: int) -> None:
+            if done == last_report["count"]:
+                return
+            last_report["count"] = done
+            asyncio.create_task(
+                update.effective_chat.send_message(f"Идёт сбор: {done}/{total}")
+            )
         try:
-            result = await self.on_run()
+            result = await self.on_run(progress_cb)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Ошибка ручного запуска: %s", exc)
             await update.effective_chat.send_message(f"Ошибка: {exc}")
@@ -179,8 +188,17 @@ class BotController:
         if not await self._ensure_access(update):
             return
         await update.effective_chat.send_message("Запускаю тестовый сбор (до 5 постов)...")
+        last_report = {"count": 0}
+
+        def progress_cb(done: int, total: int) -> None:
+            if done == last_report["count"]:
+                return
+            last_report["count"] = done
+            asyncio.create_task(
+                update.effective_chat.send_message(f"Идёт сбор: {done}/{total}")
+            )
         try:
-            result = await self.on_run_preview()
+            result = await self.on_run_preview(progress_cb)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Ошибка тестового запуска: %s", exc)
             await update.effective_chat.send_message(f"Ошибка: {exc}")
