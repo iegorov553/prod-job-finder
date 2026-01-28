@@ -164,7 +164,12 @@ class BotController:
             logger.exception("Ошибка ручного запуска: %s", exc)
             await update.effective_chat.send_message(f"Ошибка: {exc}")
             return
-        await update.effective_chat.send_message(result.message)
+        await self._send_text_or_file(
+            update.effective_chat,
+            result.message,
+            "result.txt",
+            "Результаты сбора",
+        )
         if result.log_path:
             try:
                 size = os.path.getsize(result.log_path)
@@ -203,7 +208,12 @@ class BotController:
             logger.exception("Ошибка тестового запуска: %s", exc)
             await update.effective_chat.send_message(f"Ошибка: {exc}")
             return
-        await update.effective_chat.send_message(result.message)
+        await self._send_text_or_file(
+            update.effective_chat,
+            result.message,
+            "result.txt",
+            "Результаты тестового сбора",
+        )
         if result.log_path:
             try:
                 size = os.path.getsize(result.log_path)

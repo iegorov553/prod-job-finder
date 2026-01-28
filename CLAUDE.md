@@ -1,7 +1,27 @@
-# PM Telegram Job Digester
+- Общайся с пользователем на русском языке.
+- Применяй модульную архитектуру (код дели на логически изолированные модули).
+- Придерживайся TDD: сначала тесты, затем реализация.
+- Если в кодовой базе есть участки без тестов, предлагай пользователю их покрыть.
+- Если файл > 400 строк или функция > 50 строк, предлагай рефакторинг.
+- Подробно и понятным языком поясняй каждый свой шаг; профессиональные термины кратко расшифровывай.
+- Запрашивай помощь пользователя, если в окружении нет нужных инструментов или прав.
+- Запрашивай пользователя, если нужны изменения в сторонних сервисах, используемых проектом.
+- Перед каждым коммитом запускай тесты и убеждайся, что все они проходят успешно.
+- Все изменения пушь только в ветку `staging`; пуш в `main` строго запрещён.
+- Обязательно используй в проекте инструменты: Ruff (lint и форматирование), mypy, Bandit, pip-audit, Poetry, pre-commit, pytest.
+- Работай внутри Docker-образа: production-образ описывай в `Dockerfile`, тесты выполняй в том же образе.
+- Перед каждым коммитом обновляй соответствующие файлы документации.
+- Вся проектная документация, включая README, должна быть на английском языке.
+- Файл `CLAUDE.md` должен содержать краткое описание проекта и ссылки на документацию, чтобы ИИ-агенты для разработки могли быстро найти нужную информацию.
+- Перед началом работы над задачей оцени её неопределённость по шкале 0–1; если показатель выше 0,1, задавай пользователю уточняющие вопросы, пока он не опустится до 0,1 или ниже.
+- При запросе от пользователя на разработку новой функциональности или доработку существующей сначала сформируй подробный план действий, опиши его пользователю и согласуй дальнейшую работу.
+- Не помещай текстовые строки интерфейса в код напрямую; выноси их в отдельные словари или файлы ресурсов.
 
-- Purpose: Telegram user-bot that collects channel posts, filters via LLM for a Product Manager profile (middle/senior/lead; remote or Barcelona; EN/RU; ~100k+ USD), and sends a daily Markdown digest via a Bot API control bot (no Saved Messages).
-- Entry point: `main.py` (Telethon + Bot API control + scheduler).
-- Core modules: `src/job_finder/config.py`, `state.py`, `settings.py`, `scraper.py`, `llm_client.py`, `digest.py`, `scheduler.py`, `bot_control.py`, `utils/locks.py`, `models.py`, `resources/messages.py`.
-- State/settings: JSON files (`STATE_PATH` default `state.json`; `SETTINGS_PATH` default `settings.json`) and `digest_last.md` cache.
-- Setup & usage: see `README.md`; environment template in `.env.example`; Docker build in `Dockerfile`.
+---
+
+## Project quick info
+- Purpose: daily Telegram user-bot that fetches job posts, uses an LLM to filter for a Product Manager profile, and sends one Markdown digest to Saved Messages.
+- Entry point: `main.py` (async flow via Telethon + Bot API control bot + scheduler).
+- Key modules (src/job_finder): `config.py`, `state.py`, `settings.py`, `scraper.py`, `llm_client.py`, `digest.py`, `scheduler.py`, `bot_control.py`, `utils/locks.py`, `models.py`, `resources/messages.py`.
+- State: `state.json` (configurable via `STATE_PATH`) storing `last_message_id` per channel; `settings.json` for channels/whitelist/schedule; `digest_last.md` caches the last digest.
+- Docs: see `README.md` (English) for setup, env vars, Railway usage; `.env.example` for configuration template; `Dockerfile` for production image.
