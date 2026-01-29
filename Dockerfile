@@ -16,6 +16,6 @@ RUN poetry install --no-root --only main --no-interaction --no-ansi \
 
 COPY src ./src
 COPY main.py ./
-COPY .env.example README.md AGENTS.md ./ 
+COPY .env.example README.md ./ 
 
 CMD ["python", "main.py"]
