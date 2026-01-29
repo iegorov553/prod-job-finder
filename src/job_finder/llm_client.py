@@ -125,7 +125,8 @@ def _parse_multi_vacancy_response(
         if not isinstance(item, dict):
             continue
 
-        raw_post_id = item.get("post_id")
+        # Support both new format (post_id) and legacy format (id)
+        raw_post_id = item.get("post_id") or item.get("id")
         if raw_post_id is None:
             logger.warning("Skipping response without post_id: %s", item)
             continue
@@ -140,8 +141,12 @@ def _parse_multi_vacancy_response(
             logger.warning("Unknown post_id in response: %s", post_id)
             continue
 
-        vacancies_raw = item.get("vacancies", [])
-        if not isinstance(vacancies_raw, list):
+        # Support both new format (vacancies array) and legacy format (flat object)
+        vacancies_raw = item.get("vacancies")
+        if vacancies_raw is None:
+            # Legacy format: the item itself is a single vacancy
+            vacancies_raw = [item]
+        elif not isinstance(vacancies_raw, list):
             vacancies_raw = []
 
         vacancies: List[VacancyFromLLM] = []
