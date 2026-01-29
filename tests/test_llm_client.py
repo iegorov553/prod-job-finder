@@ -47,6 +47,8 @@ def _config(tmp_path) -> Config:
         relevant_log_path=tmp_path / "rel.jsonl",
         bot_token="token",
         allowed_user_ids=[1],
+        supabase_url=None,
+        supabase_key=None,
     )
 
 
@@ -69,6 +71,7 @@ def test_analyze_posts_parses_response(monkeypatch, tmp_path) -> None:
                 "relevance_reason": "Senior PM remote",
                 "title": "Senior PM",
                 "company": "Acme",
+                "industry": "Tech",
                 "level": "senior",
                 "role": "PM",
                 "location": "Remote",
@@ -80,6 +83,7 @@ def test_analyze_posts_parses_response(monkeypatch, tmp_path) -> None:
                 "source_channel": "@a",
                 "source_message_id": 1,
                 "source_link": "https://t.me/a/1",
+                "apply_link": "https://example.com/apply",
                 "raw_snippet": "snippet",
             }
         ]

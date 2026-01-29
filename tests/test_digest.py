@@ -10,6 +10,7 @@ def _sample_vacancy(**kwargs):
         relevance_reason="relevant",
         title="Senior PM",
         company="Acme",
+        industry=None,
         level="senior",
         role="Product Manager",
         location="Remote",
@@ -21,6 +22,7 @@ def _sample_vacancy(**kwargs):
         source_channel="@a",
         source_message_id=10,
         source_link="https://t.me/a/10",
+        apply_link=None,
         raw_snippet="Desc",
     )
     base.update(kwargs)

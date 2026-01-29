@@ -26,6 +26,7 @@ class VacancyNormalized:
 
     title: Optional[str]
     company: Optional[str]
+    industry: Optional[str]
     level: Optional[Seniority]
     role: Optional[str]
     location: Optional[str]
@@ -40,5 +41,6 @@ class VacancyNormalized:
     source_channel: str
     source_message_id: int
     source_link: Optional[str]
+    apply_link: Optional[str]
 
     raw_snippet: str

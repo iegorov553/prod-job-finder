@@ -22,6 +22,11 @@
 ## Project quick info
 - Purpose: daily Telegram user-bot that fetches job posts, uses an LLM to filter for a Product Manager profile, and sends one Markdown digest to Saved Messages.
 - Entry point: `main.py` (async flow via Telethon + Bot API control bot + scheduler).
-- Key modules (src/job_finder): `config.py`, `state.py`, `settings.py`, `scraper.py`, `llm_client.py`, `digest.py`, `scheduler.py`, `bot_control.py`, `utils/locks.py`, `models.py`, `resources/messages.py`.
-- State: `state.json` (configurable via `STATE_PATH`) storing `last_message_id` per channel; `settings.json` for channels/whitelist/schedule; `digest_last.md` caches the last digest.
+- Key modules (src/job_finder):
+  - Core: `config.py`, `state.py`, `settings.py`, `scraper.py`, `llm_client.py`, `digest.py`, `scheduler.py`, `bot_control.py`
+  - DB (Supabase): `db/client.py`, `db/models.py`, `db/posts.py`, `db/vacancies.py`, `db/channel_states.py`
+  - Utils: `utils/locks.py`, `models.py`, `resources/messages.py`, `resources/prompts.py`
+- State: `state.json` (file-based) OR Supabase `channel_states` table (when DB configured) storing `last_message_id` per channel.
+- Database (optional): Supabase PostgreSQL with tables `posts`, `vacancies`, `channel_states`. See `migrations/001_initial_schema.sql`.
+- Multi-vacancy: LLM extracts multiple vacancies from single post using `SYSTEM_PROMPT_MULTI_VACANCY`.
 - Docs: see `README.md` (English) for setup, env vars, Railway usage; `.env.example` for configuration template; `Dockerfile` for production image.

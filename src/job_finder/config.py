@@ -40,6 +40,10 @@ class Config:
     bot_token: str
     allowed_user_ids: List[int]
 
+    # Supabase configuration
+    supabase_url: str | None
+    supabase_key: str | None
+
 
 def _parse_channels(raw: str | None) -> List[str]:
     if not raw:
@@ -107,6 +111,9 @@ def load_config(env_path: str | None = ".env") -> Config:
     if not allowed_user_ids:
         raise ValueError("ALLOW_USER_IDS or TELEGRAM_TARGET_USER_ID is required")
 
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_KEY")
+
     return Config(
         telegram_api_id=telegram_api_id,
         telegram_api_hash=telegram_api_hash,
@@ -131,4 +138,6 @@ def load_config(env_path: str | None = ".env") -> Config:
         relevant_log_path=relevant_log_path,
         bot_token=bot_token,
         allowed_user_ids=allowed_user_ids,
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
     )

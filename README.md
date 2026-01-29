@@ -5,9 +5,11 @@ Daily one-shot Telegram user-bot that fetches posts from specified channels, sen
 ## Features
 - Telethon user-bot: fetches new posts per channel, tracks `last_message_id`.
 - LLM filtering for a single Product Manager profile (middle/senior/lead, remote or Barcelona, EN/RU, ~100k+ USD).
-- Minimal state in `state.json`.
+- **Multi-vacancy extraction**: LLM extracts ALL vacancies from each post (one post can contain multiple jobs).
+- **Supabase integration** (optional): stores all posts and vacancies in PostgreSQL for analytics and tracking.
+- Minimal state in `state.json` (or Supabase `channel_states` table when DB is configured).
 - Bot API control bot: commands to view status, manage channels, trigger runs, and configure daily schedule.
-- One run = full cycle (fetch → analyze → digest → send); работает как долгоживущий сервис (polling Bot API) или ручной запуск.
+- One run = full cycle (fetch → analyze → digest → send); works as a long-running service (polling Bot API) or manual trigger.
 
 ## Configuration
 Populate environment variables (or `.env`):
@@ -40,8 +42,30 @@ MAX_POSTS_PER_RUN=30
 HOURS_LOOKBACK=24
 STATE_PATH=state.json
 SETTINGS_PATH=settings.json
+
+# Optional: Supabase for persistent storage
+# SUPABASE_URL=https://your-project.supabase.co
+# SUPABASE_KEY=your_service_role_key
 ```
 See `.env.example` for a ready template.
+
+## Supabase Setup (Optional)
+When Supabase is configured, the app stores all data in PostgreSQL:
+- `posts`: all fetched Telegram messages
+- `vacancies`: extracted job vacancies (multiple per post)
+- `channel_states`: replaces `state.json` for tracking last message IDs
+
+### Database Schema
+Run the migration in Supabase SQL Editor (Dashboard → SQL Editor):
+```sql
+-- See migrations/001_initial_schema.sql for full schema
+```
+
+### Benefits of Supabase
+- Persistent storage across deploys
+- Analytics on all historical vacancies
+- Track application status per vacancy
+- Multi-device access to data
 
 ## Local Setup
 1. Install dependencies (Poetry recommended):

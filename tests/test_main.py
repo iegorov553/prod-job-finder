@@ -54,6 +54,8 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
         relevant_log_path=tmp_path / "rel.jsonl",
         bot_token="token",
         allowed_user_ids=[1],
+        supabase_url=None,
+        supabase_key=None,
     )
     loaded_state = State(channels=[ChannelState(username="@a", last_message_id=None)])
 
@@ -82,6 +84,7 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
                 relevance_reason="ok",
                 title="Senior PM",
                 company="Acme",
+                industry=None,
                 level="senior",
                 role="PM",
                 location="Remote",
@@ -93,6 +96,7 @@ async def test_run_once_sends_digest(monkeypatch, tmp_path):
                 source_channel="@a",
                 source_message_id=1,
                 source_link="https://t.me/a/1",
+                apply_link=None,
                 raw_snippet="Senior PM",
             )
         ]
