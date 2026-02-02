@@ -33,16 +33,42 @@ async def _collect_channel_messages(
     channel: str,
     last_message_id: int | None,
     hours_lookback: int,
+    max_messages: int = 500,
 ) -> List[Message]:
-    offset_date = datetime.now(tz=timezone.utc) - timedelta(hours=hours_lookback)
+    """Collect messages from a channel.
+
+    Two strategies depending on whether we have last_message_id:
+    1. With last_message_id: get messages with ID > last_message_id (new messages)
+    2. Without last_message_id: get recent messages within hours_lookback window
+    """
+    cutoff_date = datetime.now(tz=timezone.utc) - timedelta(hours=hours_lookback)
     messages: List[Message] = []
-    async for message in client.iter_messages(
-        channel,
-        min_id=last_message_id or 0,
-        offset_date=offset_date,
-        reverse=True,
-    ):
-        messages.append(message)
+
+    if last_message_id:
+        # Channel with known state: get new messages since last_message_id
+        async for message in client.iter_messages(
+            channel,
+            min_id=last_message_id,
+            limit=max_messages,
+            reverse=True,
+        ):
+            msg_date = message.date.replace(tzinfo=timezone.utc)
+            if msg_date >= cutoff_date:
+                messages.append(message)
+    else:
+        # New channel: get recent messages within hours_lookback window
+        # Iterate from newest to oldest, stop when we hit old messages
+        async for message in client.iter_messages(
+            channel,
+            limit=max_messages,
+        ):
+            msg_date = message.date.replace(tzinfo=timezone.utc)
+            if msg_date < cutoff_date:
+                break  # Reached messages older than cutoff, stop
+            messages.append(message)
+        # Reverse to get chronological order (oldest first)
+        messages.reverse()
+
     return messages
 
 
