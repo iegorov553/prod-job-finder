@@ -5,6 +5,28 @@ from typing import List
 from job_finder.models import VacancyNormalized
 from job_finder.resources import messages
 
+# Placeholder values from LLM that should be treated as "no data"
+_PLACEHOLDER_VALUES = frozenset(
+    {
+        "unspecified",
+        "not specified",
+        "salary not specified",
+        "unknown",
+        "n/a",
+        "none",
+        "не указана",
+        "не указано",
+        "",
+    }
+)
+
+
+def _is_placeholder(value: str | None) -> bool:
+    """Check if value is a placeholder that should be hidden."""
+    if not value:
+        return True
+    return value.strip().lower() in _PLACEHOLDER_VALUES
+
 
 def _sort_key(vacancy: VacancyNormalized) -> tuple[int, float]:
     location_priority = 2
@@ -36,11 +58,11 @@ def _format_salary(salary_min: float | None, salary_max: float | None) -> str:
 def _build_metadata_parts(vacancy: VacancyNormalized) -> list[str]:
     """Build emoji-prefixed metadata parts for a vacancy."""
     parts: list[str] = []
-    if vacancy.company:
+    if vacancy.company and not _is_placeholder(vacancy.company):
         parts.append(f"🏢 {vacancy.company}")
-    if vacancy.industry:
+    if vacancy.industry and not _is_placeholder(vacancy.industry):
         parts.append(f"🏭 {vacancy.industry}")
-    if vacancy.location:
+    if vacancy.location and not _is_placeholder(vacancy.location):
         loc = vacancy.location
         if vacancy.remote_type and vacancy.remote_type != "unknown":
             loc += f" ({vacancy.remote_type})"
@@ -73,7 +95,7 @@ def _format_vacancy(index: int, vacancy: VacancyNormalized) -> str:
     if vacancy.salary_min_usd or vacancy.salary_max_usd:
         salary = _format_salary(vacancy.salary_min_usd, vacancy.salary_max_usd)
         lines.append(f"   💰 {salary}")
-    elif vacancy.salary_raw:
+    elif vacancy.salary_raw and not _is_placeholder(vacancy.salary_raw):
         lines.append(f"   💰 {vacancy.salary_raw}")
 
     # Apply link on separate line (only if present)

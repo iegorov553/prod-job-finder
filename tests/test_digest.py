@@ -119,3 +119,39 @@ def test_format_salary_range() -> None:
     assert digest._format_salary(None, 100000) == "до $100k"
     assert digest._format_salary(150000, None) == "$150k+"
     assert digest._format_salary(None, None) == ""
+
+
+def test_is_placeholder() -> None:
+    """Test placeholder detection."""
+    # Should be placeholders
+    assert digest._is_placeholder(None) is True
+    assert digest._is_placeholder("") is True
+    assert digest._is_placeholder("unspecified") is True
+    assert digest._is_placeholder("Unspecified") is True
+    assert digest._is_placeholder("not specified") is True
+    assert digest._is_placeholder("salary not specified") is True
+    assert digest._is_placeholder("unknown") is True
+    assert digest._is_placeholder("n/a") is True
+    assert digest._is_placeholder("не указана") is True
+    # Should NOT be placeholders
+    assert digest._is_placeholder("Berlin") is False
+    assert digest._is_placeholder("$100k") is False
+    assert digest._is_placeholder("Remote") is False
+
+
+def test_format_vacancy_hides_unspecified_location() -> None:
+    """Test that 'unspecified' location is hidden."""
+    vacancy = _sample_vacancy(location="unspecified", remote_type="remote")
+    result = digest._format_vacancy(1, vacancy)
+    assert "📍" not in result
+    assert "unspecified" not in result
+
+
+def test_format_vacancy_hides_salary_not_specified() -> None:
+    """Test that 'salary not specified' is hidden."""
+    vacancy = _sample_vacancy(
+        salary_min_usd=None, salary_max_usd=None, salary_raw="salary not specified"
+    )
+    result = digest._format_vacancy(1, vacancy)
+    assert "💰" not in result
+    assert "salary not specified" not in result
