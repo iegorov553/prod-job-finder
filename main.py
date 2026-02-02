@@ -1,24 +1,29 @@
 from __future__ import annotations
 
-import base64
 import asyncio
+import base64
 import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from job_finder import digest, llm_client, scraper, state
+from job_finder import digest, llm_client, scraper
 from job_finder.bot_control import BotController, RunResult
 from job_finder.config import Config, load_config
-from job_finder.db import SupabaseNotConfiguredError, get_supabase_client, init_supabase
-from job_finder.db.channel_states import ensure_channels_exist, update_last_message_id
+from job_finder.db import init_supabase
+from job_finder.db.channel_states import (
+    ensure_channels_exist,
+    get_all_channel_states,
+    update_last_message_id,
+)
 from job_finder.db.models import PostCreate, VacancyCreate
-from job_finder.db.posts import create_posts_batch, get_pending_posts, mark_posts_analyzed
+from job_finder.db.posts import create_posts_batch, mark_posts_analyzed
+from job_finder.db.settings import ensure_settings_exist
 from job_finder.db.vacancies import create_vacancies_batch, get_new_relevant_vacancies
 from job_finder.resources import messages
-from job_finder.scheduler import PipelineScheduler
-from job_finder.settings import load_settings, save_settings
+from job_finder.scheduler import PipelineScheduler, SchedulerConfig
+from job_finder.settings_manager import SettingsManager, init_settings_manager
 from job_finder.utils.locks import PipelineLock
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -30,8 +35,8 @@ RELEVANT_LOG_DEFAULT = Path("relevant_log.jsonl")
 pipeline_lock = PipelineLock()
 scheduler = PipelineScheduler()
 
-# Global flag for Supabase availability
-_supabase_enabled = False
+# Global settings manager
+_settings_manager: SettingsManager | None = None
 
 
 def _ensure_session_file(
@@ -53,10 +58,6 @@ def _ensure_session_file(
     logger.info("Восстановлен файл сессии Telethon из TELEGRAM_SESSION_BASE64.")
 
 
-async def _run_once(config: Config, channels: list[str]) -> str:
-    return await _run_once(config, channels, limit_posts=None, update_state=True)
-
-
 async def _run_once(
     config: Config,
     channels: list[str],
@@ -64,73 +65,9 @@ async def _run_once(
     update_state: bool = True,
     progress_cb: Callable[[int, int], None] | None = None,
 ) -> str:
-    _ensure_session_file(
-        config.telegram_session,
-        config.telegram_session_base64,
-        config.telegram_string_session,
-        Path("."),
-    )
-    current_state = state.load_state(config.state_path, channels)
-    client = scraper.create_client(
-        config.telegram_api_id,
-        config.telegram_api_hash,
-        config.telegram_session,
-        string_session=config.telegram_string_session,
-    )
-    async with client:
-        await client.start()
-        posts = await scraper.fetch_new_posts(
-            client,
-            channels,
-            current_state,
-            hours_lookback=config.hours_lookback,
-        )
-        effective_limit = limit_posts if limit_posts is not None else config.max_posts_per_run
-        posts = posts[:effective_limit]
-        if not posts:
-            logger.info(messages.NO_NEW_MESSAGES)
-            return messages.NO_NEW_MESSAGES
-        logger.info("Получено %s новых сообщений", len(posts))
-        llm_logs: list[dict] = []
-        normalized = llm_client.analyze_posts(
-            posts,
-            config,
-            logs=llm_logs,
-            progress_cb=progress_cb,
-        )
-        if llm_logs and not any(item.get("parsed_ok") for item in llm_logs if isinstance(item, dict)):
-            logger.warning("LLM не вернул валидные результаты; состояние не обновляем.")
-            return "LLM rate limit or parse error. Please try again later."
-        relevant = [item for item in normalized if item.is_relevant]
-        logger.info("Релевантных вакансий: %s", len(relevant))
-        digest_text = digest.build_digest(relevant)
-        DIGEST_CACHE_PATH.write_text(digest_text)
-        if llm_logs:
-            LLM_LOG_DIR.mkdir(exist_ok=True)
-            log_path = LLM_LOG_DIR / f"llm_log_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
-            log_path.write_text(json.dumps(llm_logs, ensure_ascii=False, indent=2))
-        if update_state:
-            for channel in channels:
-                last_id = scraper.get_max_message_id(posts, channel)
-                if last_id is not None:
-                    current_state.update_last_message_id(channel, last_id)
-            state.save_state(config.state_path, current_state)
-        else:
-            # even in preview mode keep state as is
-            pass
-        return digest_text
+    """Run the main pipeline.
 
-
-async def _run_once_db(
-    config: Config,
-    channels: list[str],
-    limit_posts: int | None = None,
-    update_state: bool = True,
-    progress_cb: Callable[[int, int], None] | None = None,
-) -> str:
-    """Run pipeline with Supabase database integration.
-
-    New pipeline:
+    Pipeline steps:
     1. Ensure channel states exist in DB
     2. Fetch posts from Telegram
     3. Save posts to DB
@@ -152,16 +89,6 @@ async def _run_once_db(
     channel_states = ensure_channels_exist(channels)
     channel_state_map = {cs.channel: cs.last_message_id for cs in channel_states}
 
-    # Create a state-like object for scraper compatibility
-    class DBStateAdapter:
-        def get_last_message_id(self, channel: str) -> int | None:
-            return channel_state_map.get(channel)
-
-        def update_last_message_id(self, channel: str, last_id: int) -> None:
-            channel_state_map[channel] = last_id
-
-    db_state = DBStateAdapter()
-
     client = scraper.create_client(
         config.telegram_api_id,
         config.telegram_api_hash,
@@ -174,7 +101,7 @@ async def _run_once_db(
         posts = await scraper.fetch_new_posts(
             client,
             channels,
-            db_state,
+            channel_state_map,
             hours_lookback=config.hours_lookback,
         )
         effective_limit = limit_posts if limit_posts is not None else config.max_posts_per_run
@@ -205,14 +132,23 @@ async def _run_once_db(
 
         # Analyze posts with LLM (multi-vacancy)
         llm_logs: list[dict] = []
+
+        # Get custom prompt from settings manager if available
+        custom_prompt = None
+        if _settings_manager and _settings_manager.is_supabase_available():
+            custom_prompt = _settings_manager.get_custom_prompt()
+
         analysis_results = llm_client.analyze_posts_db(
             db_posts,
             config,
             logs=llm_logs,
             progress_cb=progress_cb,
+            custom_prompt=custom_prompt,
         )
 
-        if llm_logs and not any(item.get("parsed_ok") for item in llm_logs if isinstance(item, dict)):
+        if llm_logs and not any(
+            item.get("parsed_ok") for item in llm_logs if isinstance(item, dict)
+        ):
             logger.warning("LLM не вернул валидные результаты; состояние не обновляем.")
             return "LLM rate limit or parse error. Please try again later."
 
@@ -257,7 +193,10 @@ async def _run_once_db(
         # Save LLM logs
         if llm_logs:
             LLM_LOG_DIR.mkdir(exist_ok=True)
-            log_path = LLM_LOG_DIR / f"llm_log_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+            log_path = (
+                LLM_LOG_DIR
+                / f"llm_log_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+            )
             log_path.write_text(json.dumps(llm_logs, ensure_ascii=False, indent=2))
 
         # Update channel states in DB
@@ -314,30 +253,18 @@ async def _run_once_db(
 
 
 def main() -> None:
-    global _supabase_enabled
+    global _settings_manager
 
     config = load_config()
 
-    # Initialize Supabase if configured
-    if config.supabase_url and config.supabase_key:
-        try:
-            init_supabase(config.supabase_url, config.supabase_key)
-            _supabase_enabled = True
-            logger.info("Supabase initialized successfully")
-        except Exception as exc:
-            logger.warning("Failed to initialize Supabase: %s", exc)
-            _supabase_enabled = False
-    else:
-        logger.info("Supabase not configured, using file-based state")
-        _supabase_enabled = False
+    # Initialize Supabase (required)
+    init_supabase(config.supabase_url, config.supabase_key)
+    logger.info("Supabase initialized successfully")
 
-    settings_path = getattr(config, "settings_path", Path("settings.json"))
-
-    def load_current_settings():
-        return load_settings(settings_path, env_channels=config.telegram_channels)
-
-    settings = load_current_settings()
-    save_settings(settings_path, settings)
+    # Initialize settings manager and ensure settings exist in DB
+    _settings_manager = init_settings_manager()
+    ensure_settings_exist()
+    logger.info("Settings manager initialized")
 
     relevant_log_path = getattr(config, "relevant_log_path", RELEVANT_LOG_DEFAULT)
 
@@ -357,27 +284,17 @@ def main() -> None:
         limit_posts: int | None = None,
         progress_cb: Callable[[int, int], None] | None = None,
     ) -> RunResult:
-        current_settings = load_current_settings()
+        channels = _settings_manager.get_channels() if _settings_manager else []
         log_file: Path | None = None
         async with pipeline_lock.acquire():
             try:
-                # Use DB pipeline if Supabase is enabled
-                if _supabase_enabled:
-                    result_text = await _run_once_db(
-                        config,
-                        current_settings.channels,
-                        limit_posts=limit_posts,
-                        update_state=update_state,
-                        progress_cb=progress_cb,
-                    )
-                else:
-                    result_text = await _run_once(
-                        config,
-                        current_settings.channels,
-                        limit_posts=limit_posts,
-                        update_state=update_state,
-                        progress_cb=progress_cb,
-                    )
+                result_text = await _run_once(
+                    config,
+                    channels,
+                    limit_posts=limit_posts,
+                    update_state=update_state,
+                    progress_cb=progress_cb,
+                )
                 if result_text and result_text != messages.NO_NEW_MESSAGES:
                     # Try to append relevant items parsed from last log (if any)
                     parsed_relevant: list[dict] = []
@@ -396,7 +313,10 @@ def main() -> None:
                                                 if isinstance(batch_data, list):
                                                     # enrich with channel id if missing
                                                     for item in batch_data:
-                                                        if isinstance(item, dict) and "source_channel" not in item:
+                                                        if (
+                                                            isinstance(item, dict)
+                                                            and "source_channel" not in item
+                                                        ):
                                                             item["source_channel"] = ""
                                                     parsed_relevant.extend(batch_data)
                                             except Exception:
@@ -416,17 +336,18 @@ def main() -> None:
                 return RunResult(message=f"Ошибка пайплайна: {exc}", log_path=None)
 
     def status_text() -> str:
-        current_settings = load_current_settings()
-        st = state.load_state(config.state_path, current_settings.channels)
+        channels = _settings_manager.get_channels() if _settings_manager else []
+        channel_states = get_all_channel_states()
+        channel_state_map = {cs.channel: cs.last_message_id for cs in channel_states}
+        scheduler_cfg = _settings_manager.get_scheduler_config() if _settings_manager else {}
+
         lines = ["Статус:"]
-        lines.append(
-            f"Каналы: {', '.join(current_settings.channels) if current_settings.channels else 'нет'}"
-        )
-        for ch in current_settings.channels:
-            last_id = st.get_last_message_id(ch)
+        lines.append(f"Каналы: {', '.join(channels) if channels else 'нет'}")
+        for ch in channels:
+            last_id = channel_state_map.get(ch)
             lines.append(f"{ch}: last_message_id={last_id}")
-        if current_settings.scheduler.enabled and current_settings.scheduler.time_utc:
-            lines.append(f"Автозапуск: ежедневно в {current_settings.scheduler.time_utc} UTC")
+        if scheduler_cfg.get("enabled") and scheduler_cfg.get("time_utc"):
+            lines.append(f"Автозапуск: ежедневно в {scheduler_cfg['time_utc']} UTC")
         else:
             lines.append("Автозапуск: выкл")
         return "\n".join(lines)
@@ -463,30 +384,9 @@ def main() -> None:
             else "Автозапуск выключен."
         )
 
-    # Fallbacks for old configs that might not include new fields
-    bot_token = getattr(config, "bot_token", None)
-    if bot_token is None:
-        import os
-        bot_token = os.environ.get("BOT_TOKEN")
-    allowed_user_ids = getattr(config, "allowed_user_ids", None)
-    if allowed_user_ids is None:
-        import os
-
-        raw_ids = os.environ.get("ALLOW_USER_IDS") or os.environ.get("TELEGRAM_TARGET_USER_ID")
-        allowed_user_ids = []
-        if raw_ids:
-            for part in raw_ids.split(","):
-                part = part.strip()
-                if part:
-                    try:
-                        allowed_user_ids.append(int(part))
-                    except ValueError:
-                        continue
-
     bot = BotController(
-        token=bot_token,
-        allowed_users=allowed_user_ids,
-        settings_path=settings_path,
+        token=config.bot_token,
+        allowed_users=config.allowed_user_ids,
         on_run=lambda progress_cb: run_pipeline_and_return(
             update_state=True, limit_posts=None, progress_cb=progress_cb
         ),
@@ -498,12 +398,19 @@ def main() -> None:
         get_digest=last_digest_text,
         get_history=history_text,
         history_file=str(relevant_log_path),
+        settings_manager=_settings_manager,
     )
 
     async def serve() -> None:
         scheduler.start()
+        # Load scheduler config from DB
+        scheduler_cfg = _settings_manager.get_scheduler_config() if _settings_manager else {}
+        initial_scheduler = SchedulerConfig(
+            enabled=scheduler_cfg.get("enabled", False),
+            time_utc=scheduler_cfg.get("time_utc"),
+        )
         scheduler.update(
-            load_current_settings().scheduler,
+            initial_scheduler,
             lambda: asyncio.create_task(run_pipeline_and_return()),
         )
         try:

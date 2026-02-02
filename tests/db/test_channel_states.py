@@ -7,9 +7,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from job_finder.db.models import ChannelStateCreate, ChannelStateDB
+from job_finder.db.models import ChannelStateCreate
 
 
 class TestGetChannelState:
@@ -120,9 +118,7 @@ class TestUpsertChannelState:
         """Should update existing record if channel exists."""
         mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.data = [
-            {"channel": "@existing", "last_message_id": 500, "updated_at": None}
-        ]
+        mock_response.data = [{"channel": "@existing", "last_message_id": 500, "updated_at": None}]
         mock_client.table.return_value.upsert.return_value.execute.return_value = mock_response
 
         with patch("job_finder.db.channel_states.get_supabase_client", return_value=mock_client):
@@ -141,9 +137,7 @@ class TestUpdateLastMessageId:
         """Should update last_message_id for a channel."""
         mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.data = [
-            {"channel": "@channel", "last_message_id": 777, "updated_at": None}
-        ]
+        mock_response.data = [{"channel": "@channel", "last_message_id": 777, "updated_at": None}]
         mock_client.table.return_value.upsert.return_value.execute.return_value = mock_response
 
         with patch("job_finder.db.channel_states.get_supabase_client", return_value=mock_client):

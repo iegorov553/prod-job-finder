@@ -11,7 +11,7 @@ SYSTEM_PROMPT = (
     "For every post return one object with fields of VacancyNormalized plus input id. "
     "Always fill is_relevant and relevance_reason (short in English). "
     "If salary missing set salary_min_usd and salary_max_usd to null and salary_raw to textual description. "
-    'language should be \"en\", \"ru\", or \"other\" depending on post language. '
+    'language should be "en", "ru", or "other" depending on post language. '
     "Return a pure JSON array without extra text."
 )
 
@@ -33,23 +33,23 @@ SYSTEM_PROMPT_MULTI_VACANCY = (
     "language not EN/RU, non-job content (ads, news, etc.)\n\n"
     "For each POST return:\n"
     "{\n"
-    '  \"post_id\": <input post id>,\n'
-    '  \"vacancies\": [\n'
+    '  "post_id": <input post id>,\n'
+    '  "vacancies": [\n'
     "    {\n"
-    '      \"is_relevant\": boolean,\n'
-    '      \"relevance_reason\": \"short reason in English\",\n'
-    '      \"title\": \"job title or null\",\n'
-    '      \"company\": \"company name or null\",\n'
-    '      \"industry\": \"industry/domain or null\",\n'
-    '      \"level\": \"junior|middle|senior|lead|head|other or null\",\n'
-    '      \"location\": \"location or null\",\n'
-    '      \"remote_type\": \"remote|hybrid|onsite|unknown\",\n'
-    '      \"salary_min_usd\": number or null,\n'
-    '      \"salary_max_usd\": number or null,\n'
-    '      \"salary_raw\": \"original salary text or null\",\n'
-    '      \"language\": \"en|ru|other\",\n'
-    '      \"raw_snippet\": \"brief excerpt from post about this vacancy\",\n'
-    '      \"apply_link\": \"application URL if found or null\"\n'
+    '      "is_relevant": boolean,\n'
+    '      "relevance_reason": "short reason in English",\n'
+    '      "title": "job title or null",\n'
+    '      "company": "company name or null",\n'
+    '      "industry": "industry/domain or null",\n'
+    '      "level": "junior|middle|senior|lead|head|other or null",\n'
+    '      "location": "location or null",\n'
+    '      "remote_type": "remote|hybrid|onsite|unknown",\n'
+    '      "salary_min_usd": number or null,\n'
+    '      "salary_max_usd": number or null,\n'
+    '      "salary_raw": "original salary text or null",\n'
+    '      "language": "en|ru|other",\n'
+    '      "raw_snippet": "brief excerpt from post about this vacancy",\n'
+    '      "apply_link": "application URL if found or null"\n'
     "    },\n"
     "    ... more vacancies if present\n"
     "  ]\n"

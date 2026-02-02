@@ -5,9 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from job_finder.db.models import PostCreate, PostDB, PostUpdate
+from job_finder.db.models import PostCreate, PostUpdate
 
 
 class TestCreatePost:
@@ -194,9 +192,7 @@ class TestGetPendingPosts:
                 "created_at": None,
             }
         ]
-        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = (
-            mock_response
-        )
+        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
 
         with patch("job_finder.db.posts.get_supabase_client", return_value=mock_client):
             from job_finder.db.posts import get_pending_posts

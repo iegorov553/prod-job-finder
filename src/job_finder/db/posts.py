@@ -53,9 +53,7 @@ def create_posts_batch(posts: List[PostCreate]) -> List[PostDB]:
     payloads = [post.model_dump(mode="json") for post in posts]
 
     response = (
-        client.table(TABLE_NAME)
-        .upsert(payloads, on_conflict="channel,telegram_id")
-        .execute()
+        client.table(TABLE_NAME).upsert(payloads, on_conflict="channel,telegram_id").execute()
     )
 
     return [PostDB.model_validate(row) for row in response.data]
@@ -115,11 +113,7 @@ def get_pending_posts(limit: int = 100) -> List[PostDB]:
     """
     client = get_supabase_client()
     response = (
-        client.table(TABLE_NAME)
-        .select("*")
-        .eq("analysis_status", "pending")
-        .limit(limit)
-        .execute()
+        client.table(TABLE_NAME).select("*").eq("analysis_status", "pending").limit(limit).execute()
     )
 
     return [PostDB.model_validate(row) for row in response.data]

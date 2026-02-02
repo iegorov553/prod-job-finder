@@ -3,14 +3,16 @@ from __future__ import annotations
 import asyncio
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Mapping, Sequence
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.custom.message import Message
 
 from job_finder.models import RawPost
-from job_finder.state import State
+
+# Type alias for channel state mapping (channel -> last_message_id)
+ChannelStateMap = Mapping[str, int | None]
 
 URL_PATTERN = re.compile(r"https?://\S+")
 
@@ -71,14 +73,25 @@ def _message_to_raw_post(channel: str, message: Message) -> RawPost:
 async def fetch_new_posts(
     client: TelegramClient,
     channels: Sequence[str],
-    state: State,
+    channel_states: ChannelStateMap,
     hours_lookback: int,
 ) -> List[RawPost]:
+    """Fetch new posts from channels since last known message IDs.
+
+    Args:
+        client: Telethon client
+        channels: List of channel usernames
+        channel_states: Mapping of channel -> last_message_id
+        hours_lookback: How far back to look for messages
+
+    Returns:
+        List of RawPost objects
+    """
     tasks = [
         _collect_channel_messages(
             client,
             channel,
-            state.get_last_message_id(channel),
+            channel_states.get(channel),
             hours_lookback=hours_lookback,
         )
         for channel in channels

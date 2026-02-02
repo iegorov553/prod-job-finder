@@ -334,7 +334,9 @@ def analyze_posts(
         retry_backoff = getattr(config, "llm_retry_backoff", 2.0)
         for attempt in range(retry_max + 1):
             try:
-                response = requests.post(url, headers=headers, json=body, timeout=config.llm_timeout)
+                response = requests.post(
+                    url, headers=headers, json=body, timeout=config.llm_timeout
+                )
                 response.raise_for_status()
                 break
             except requests.Timeout as exc:
@@ -402,6 +404,7 @@ def analyze_posts_db(
     config: Config,
     logs: List[dict] | None = None,
     progress_cb: Callable[[int, int], None] | None = None,
+    custom_prompt: str | None = None,
 ) -> List[PostAnalysisResult]:
     """Analyze posts from database and return multi-vacancy results.
 
@@ -413,6 +416,7 @@ def analyze_posts_db(
         config: Application configuration
         logs: Optional list to append debug logs
         progress_cb: Optional callback for progress reporting
+        custom_prompt: Optional custom system prompt (overrides default)
 
     Returns:
         List of PostAnalysisResult with vacancies for each post
@@ -423,6 +427,9 @@ def analyze_posts_db(
     all_results: List[PostAnalysisResult] = []
     processed = 0
     total = len(posts)
+
+    # Use custom prompt if provided, otherwise use default
+    system_prompt = custom_prompt if custom_prompt else SYSTEM_PROMPT_MULTI_VACANCY
 
     for batch in _chunk_posts_db(posts, config.max_posts_per_batch):
         user_payload = _build_user_payload_db(batch)
@@ -454,7 +461,7 @@ def analyze_posts_db(
             body = {
                 "model": config.llm_model_name,
                 "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT_MULTI_VACANCY},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_payload},
                 ],
             }
@@ -468,7 +475,9 @@ def analyze_posts_db(
 
         for attempt in range(retry_max + 1):
             try:
-                response = requests.post(url, headers=headers, json=body, timeout=config.llm_timeout)
+                response = requests.post(
+                    url, headers=headers, json=body, timeout=config.llm_timeout
+                )
                 response.raise_for_status()
                 break
             except requests.Timeout as exc:

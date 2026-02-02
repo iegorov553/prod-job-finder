@@ -97,13 +97,7 @@ def get_relevant_vacancies(limit: int = 100) -> List[VacancyDB]:
         List of relevant VacancyDB objects
     """
     client = get_supabase_client()
-    response = (
-        client.table(TABLE_NAME)
-        .select("*")
-        .eq("is_relevant", True)
-        .limit(limit)
-        .execute()
-    )
+    response = client.table(TABLE_NAME).select("*").eq("is_relevant", True).limit(limit).execute()
 
     return [VacancyDB.model_validate(row) for row in response.data]
 
@@ -119,13 +113,7 @@ def get_vacancies_by_status(status: str, limit: int = 100) -> List[VacancyDB]:
         List of VacancyDB objects with the specified status
     """
     client = get_supabase_client()
-    response = (
-        client.table(TABLE_NAME)
-        .select("*")
-        .eq("status", status)
-        .limit(limit)
-        .execute()
-    )
+    response = client.table(TABLE_NAME).select("*").eq("status", status).limit(limit).execute()
 
     return [VacancyDB.model_validate(row) for row in response.data]
 
@@ -203,10 +191,7 @@ def count_relevant_vacancies() -> int:
     """
     client = get_supabase_client()
     response = (
-        client.table(TABLE_NAME)
-        .select("id", count="exact")
-        .eq("is_relevant", True)
-        .execute()
+        client.table(TABLE_NAME).select("id", count="exact").eq("is_relevant", True).execute()
     )
 
     return response.count or 0

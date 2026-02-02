@@ -1,5 +1,5 @@
-import types
 import sys
+import types
 
 
 def pytest_configure(config):

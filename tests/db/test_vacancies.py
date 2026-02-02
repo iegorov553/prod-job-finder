@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from job_finder.db.models import VacancyCreate, VacancyDB, VacancyUpdate
+from job_finder.db.models import VacancyCreate, VacancyUpdate
 
 
 class TestCreateVacancy:
@@ -175,9 +172,7 @@ class TestGetRelevantVacancies:
                 "updated_at": None,
             }
         ]
-        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = (
-            mock_response
-        )
+        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
 
         with patch("job_finder.db.vacancies.get_supabase_client", return_value=mock_client):
             from job_finder.db.vacancies import get_relevant_vacancies
@@ -316,9 +311,7 @@ class TestGetVacanciesByStatus:
                 "updated_at": None,
             }
         ]
-        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = (
-            mock_response
-        )
+        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
 
         with patch("job_finder.db.vacancies.get_supabase_client", return_value=mock_client):
             from job_finder.db.vacancies import get_vacancies_by_status

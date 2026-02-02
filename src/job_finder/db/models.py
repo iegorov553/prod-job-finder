@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Type aliases for better readability
 AnalysisStatus = Literal["pending", "completed", "failed"]
@@ -165,6 +165,158 @@ class PostAnalysisResult(BaseModel):
     vacancies: List[VacancyFromLLM] = Field(default_factory=list)
 
 
+class SettingsDB(BaseModel):
+    """Model for settings table (full record from DB).
+
+    Contains all dynamic bot configuration stored in Supabase.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str  # UUID as string
+    channels: List[str] = Field(default_factory=list)
+    scheduler_enabled: bool = False
+    scheduler_time_utc: Optional[str] = None  # HH:MM format
+    llm_model_name: str = "gpt-4.1-mini"
+    llm_temperature: Optional[Decimal] = None
+    llm_timeout: int = 60
+    llm_retry_max: int = 2
+    llm_retry_backoff: Decimal = Decimal("2.0")
+    max_posts_per_batch: int = 10
+    max_posts_per_run: int = 30
+    hours_lookback: int = 24
+    custom_prompt: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @field_validator("channels", mode="before")
+    @classmethod
+    def parse_channels(cls, v: Any) -> List[str]:
+        """Parse JSONB channels field."""
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        return []
+
+    @field_validator("scheduler_time_utc")
+    @classmethod
+    def validate_time_format(cls, v: Optional[str]) -> Optional[str]:
+        """Validate HH:MM time format."""
+        if v is None:
+            return None
+        import re
+
+        if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", v):
+            raise ValueError("Time must be in HH:MM format (00:00-23:59)")
+        return v
+
+
+class SettingsUpdate(BaseModel):
+    """Model for updating settings.
+
+    All fields are optional - only provided fields will be updated.
+    Includes validation for acceptable value ranges.
+    """
+
+    channels: Optional[List[str]] = None
+    scheduler_enabled: Optional[bool] = None
+    scheduler_time_utc: Optional[str] = None
+    llm_model_name: Optional[str] = None
+    llm_temperature: Optional[Decimal] = None
+    llm_timeout: Optional[int] = None
+    llm_retry_max: Optional[int] = None
+    llm_retry_backoff: Optional[Decimal] = None
+    max_posts_per_batch: Optional[int] = None
+    max_posts_per_run: Optional[int] = None
+    hours_lookback: Optional[int] = None
+    custom_prompt: Optional[str] = None
+
+    @field_validator("scheduler_time_utc")
+    @classmethod
+    def validate_time_format(cls, v: Optional[str]) -> Optional[str]:
+        """Validate HH:MM time format."""
+        if v is None:
+            return None
+        import re
+
+        if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", v):
+            raise ValueError("Time must be in HH:MM format (00:00-23:59)")
+        return v
+
+    @field_validator("llm_temperature")
+    @classmethod
+    def validate_temperature(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        """Validate temperature range (0.0 - 2.0)."""
+        if v is None:
+            return None
+        if v < 0 or v > 2:
+            raise ValueError("Temperature must be between 0.0 and 2.0")
+        return v
+
+    @field_validator("llm_timeout")
+    @classmethod
+    def validate_timeout(cls, v: Optional[int]) -> Optional[int]:
+        """Validate timeout range (10 - 300 seconds)."""
+        if v is None:
+            return None
+        if v < 10 or v > 300:
+            raise ValueError("Timeout must be between 10 and 300 seconds")
+        return v
+
+    @field_validator("max_posts_per_batch")
+    @classmethod
+    def validate_batch(cls, v: Optional[int]) -> Optional[int]:
+        """Validate batch size range (1 - 50)."""
+        if v is None:
+            return None
+        if v < 1 or v > 50:
+            raise ValueError("Batch size must be between 1 and 50")
+        return v
+
+    @field_validator("max_posts_per_run")
+    @classmethod
+    def validate_run_limit(cls, v: Optional[int]) -> Optional[int]:
+        """Validate run limit range (1 - 500)."""
+        if v is None:
+            return None
+        if v < 1 or v > 500:
+            raise ValueError("Run limit must be between 1 and 500")
+        return v
+
+    @field_validator("hours_lookback")
+    @classmethod
+    def validate_lookback(cls, v: Optional[int]) -> Optional[int]:
+        """Validate lookback range (1 - 168 hours / 1 week)."""
+        if v is None:
+            return None
+        if v < 1 or v > 168:
+            raise ValueError("Lookback must be between 1 and 168 hours")
+        return v
+
+    @field_validator("custom_prompt")
+    @classmethod
+    def validate_prompt_length(cls, v: Optional[str]) -> Optional[str]:
+        """Validate custom prompt length (max 10000 chars)."""
+        if v is None:
+            return None
+        if len(v) > 10000:
+            raise ValueError("Custom prompt must be at most 10000 characters")
+        return v
+
+    def to_db_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for database update, excluding None values."""
+        data = {}
+        for field_name, field_value in self:
+            if field_value is not None:
+                # Convert Decimal to float for JSON serialization
+                if isinstance(field_value, Decimal):
+                    data[field_name] = float(field_value)
+                else:
+                    data[field_name] = field_value
+        return data
+
+
 # Re-export for easier imports
 __all__ = [
     "AnalysisStatus",
@@ -182,4 +334,6 @@ __all__ = [
     "VacancyUpdate",
     "PostAnalysisResult",
     "VacancyFromLLM",
+    "SettingsDB",
+    "SettingsUpdate",
 ]

@@ -37,9 +37,7 @@ def init_supabase(url: str | None, key: str | None) -> "Client":
     global _client
 
     if not url or not key:
-        raise SupabaseNotConfiguredError(
-            "SUPABASE_URL and SUPABASE_KEY must be set in environment"
-        )
+        raise SupabaseNotConfiguredError("SUPABASE_URL and SUPABASE_KEY must be set in environment")
 
     if _client is not None:
         logger.debug("Supabase client already initialized, returning existing instance")

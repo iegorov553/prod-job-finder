@@ -1,8 +1,5 @@
 import json
-from types import SimpleNamespace
 from typing import Any, Dict, List
-
-import pytest
 
 from job_finder.config import Config
 from job_finder.llm_client import analyze_posts
@@ -42,13 +39,11 @@ def _config(tmp_path) -> Config:
         max_posts_per_batch=10,
         max_posts_per_run=30,
         hours_lookback=24,
-        state_path=tmp_path / "state.json",
-        settings_path=tmp_path / "settings.json",
         relevant_log_path=tmp_path / "rel.jsonl",
         bot_token="token",
         allowed_user_ids=[1],
-        supabase_url=None,
-        supabase_key=None,
+        supabase_url="https://test.supabase.co",
+        supabase_key="test-key",
     )
 
 

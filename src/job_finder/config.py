@@ -33,16 +33,14 @@ class Config:
     max_posts_per_run: int
     hours_lookback: int
 
-    state_path: Path
-    settings_path: Path
     relevant_log_path: Path
 
     bot_token: str
     allowed_user_ids: List[int]
 
-    # Supabase configuration
-    supabase_url: str | None
-    supabase_key: str | None
+    # Supabase configuration (required)
+    supabase_url: str
+    supabase_key: str
 
 
 def _parse_channels(raw: str | None) -> List[str]:
@@ -98,8 +96,6 @@ def load_config(env_path: str | None = ".env") -> Config:
     max_posts_per_run = int(os.environ.get("MAX_POSTS_PER_RUN", "30"))
     hours_lookback = int(os.environ.get("HOURS_LOOKBACK", "24"))
 
-    state_path = Path(os.environ.get("STATE_PATH", "state.json"))
-    settings_path = Path(os.environ.get("SETTINGS_PATH", "settings.json"))
     relevant_log_path = Path(os.environ.get("RELEVANT_LOG_PATH", "relevant_log.jsonl"))
 
     bot_token = os.environ.get("BOT_TOKEN")
@@ -112,7 +108,11 @@ def load_config(env_path: str | None = ".env") -> Config:
         raise ValueError("ALLOW_USER_IDS or TELEGRAM_TARGET_USER_ID is required")
 
     supabase_url = os.environ.get("SUPABASE_URL")
+    if not supabase_url:
+        raise ValueError("SUPABASE_URL is required")
     supabase_key = os.environ.get("SUPABASE_KEY")
+    if not supabase_key:
+        raise ValueError("SUPABASE_KEY is required")
 
     return Config(
         telegram_api_id=telegram_api_id,
@@ -133,8 +133,6 @@ def load_config(env_path: str | None = ".env") -> Config:
         max_posts_per_batch=max_posts_per_batch,
         max_posts_per_run=max_posts_per_run,
         hours_lookback=hours_lookback,
-        state_path=state_path,
-        settings_path=settings_path,
         relevant_log_path=relevant_log_path,
         bot_token=bot_token,
         allowed_user_ids=allowed_user_ids,
