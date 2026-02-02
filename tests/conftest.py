@@ -7,6 +7,12 @@ def pytest_configure(config):
     if "telegram" not in sys.modules:
         telegram = types.ModuleType("telegram")
         telegram.Update = type("Update", (), {})  # minimal placeholder
+        telegram.Chat = type("Chat", (), {})  # minimal placeholder
+        telegram.LinkPreviewOptions = type(
+            "LinkPreviewOptions",
+            (),
+            {"__init__": lambda self, is_disabled=False: None},
+        )
         sys.modules["telegram"] = telegram
 
     if "telegram.ext" not in sys.modules:

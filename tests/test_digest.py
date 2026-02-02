@@ -44,6 +44,78 @@ def test_digest_sorts_remote_first() -> None:
     onsite = _sample_vacancy(id=3, location="Berlin", remote_type="onsite", salary_max_usd=150000)
     result = digest.build_digest([onsite, barcelona, remote])
     lines = result.splitlines()
-    first_block = "\n".join(lines[4:9])
+    # First vacancy should be remote (line 4 contains "1)")
     assert "1)" in lines[4]
+    # Check that Remote appears in the first vacancy block
+    first_block = "\n".join(lines[4:8])
     assert "Remote" in first_block
+
+
+def test_format_vacancy_compact_format() -> None:
+    """Test that vacancy uses new compact emoji format."""
+    vacancy = _sample_vacancy(
+        title="Product Manager",
+        company="TechCorp",
+        industry="EdTech",
+        location="Berlin",
+        remote_type="hybrid",
+        level="senior",
+        language="en",
+        salary_min_usd=80000,
+        salary_max_usd=120000,
+        apply_link="https://apply.example.com",
+        source_link="https://t.me/jobs/123",
+    )
+    result = digest._format_vacancy(1, vacancy)
+
+    # Header should be clickable link
+    assert "[**Product Manager**](https://t.me/jobs/123)" in result
+    # Emoji metadata line
+    assert "🏢 TechCorp" in result
+    assert "🏭 EdTech" in result
+    assert "📍 Berlin (hybrid)" in result
+    assert "💼 Senior" in result
+    assert "🌐 EN" in result
+    # Salary on separate line
+    assert "💰 $80k–$120k" in result
+    # Apply link on separate line
+    assert "🔗 [Откликнуться](https://apply.example.com)" in result
+
+
+def test_format_vacancy_hides_unknown_remote_type() -> None:
+    """Test that unknown remote_type is not shown in parentheses."""
+    vacancy = _sample_vacancy(location="NYC", remote_type="unknown")
+    result = digest._format_vacancy(1, vacancy)
+    # Should show location without "(unknown)"
+    assert "📍 NYC" in result
+    assert "(unknown)" not in result
+
+
+def test_format_vacancy_hides_other_level() -> None:
+    """Test that level='other' is not shown."""
+    vacancy = _sample_vacancy(level="other")
+    result = digest._format_vacancy(1, vacancy)
+    assert "💼" not in result
+
+
+def test_format_vacancy_no_salary_when_missing() -> None:
+    """Test that salary line is omitted when no salary data."""
+    vacancy = _sample_vacancy(salary_min_usd=None, salary_max_usd=None, salary_raw=None)
+    result = digest._format_vacancy(1, vacancy)
+    assert "💰" not in result
+    assert "Зарплата" not in result
+
+
+def test_format_vacancy_raw_salary_fallback() -> None:
+    """Test that raw salary is shown when USD values are missing."""
+    vacancy = _sample_vacancy(salary_min_usd=None, salary_max_usd=None, salary_raw="€5000/month")
+    result = digest._format_vacancy(1, vacancy)
+    assert "💰 €5000/month" in result
+
+
+def test_format_salary_range() -> None:
+    """Test salary formatting helper."""
+    assert digest._format_salary(80000, 120000) == "$80k–$120k"
+    assert digest._format_salary(None, 100000) == "до $100k"
+    assert digest._format_salary(150000, None) == "$150k+"
+    assert digest._format_salary(None, None) == ""

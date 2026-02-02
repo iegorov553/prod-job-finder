@@ -16,35 +16,70 @@ def _sort_key(vacancy: VacancyNormalized) -> tuple[int, float]:
     return (location_priority, -salary_max)
 
 
-def _format_vacancy(index: int, vacancy: VacancyNormalized) -> str:
-    lines = [
-        f"{index}) **{vacancy.title or 'Product Manager'}**",
-    ]
+def _format_salary(salary_min: float | None, salary_max: float | None) -> str:
+    """Format salary range in compact form like $80k-120k or $150k+."""
+
+    def fmt(val: float) -> str:
+        if val >= 1000:
+            return f"${int(val / 1000)}k"
+        return f"${int(val)}"
+
+    if salary_min and salary_max:
+        return f"{fmt(salary_min)}–{fmt(salary_max)}"
+    elif salary_max:
+        return f"до {fmt(salary_max)}"
+    elif salary_min:
+        return f"{fmt(salary_min)}+"
+    return ""
+
+
+def _build_metadata_parts(vacancy: VacancyNormalized) -> list[str]:
+    """Build emoji-prefixed metadata parts for a vacancy."""
+    parts: list[str] = []
     if vacancy.company:
-        lines.append(f"Компания: {vacancy.company}")
+        parts.append(f"🏢 {vacancy.company}")
+    if vacancy.industry:
+        parts.append(f"🏭 {vacancy.industry}")
     if vacancy.location:
-        remote_label = f" ({vacancy.remote_type})" if vacancy.remote_type else ""
-        lines.append(f"Локация: {vacancy.location}{remote_label}")
-    if vacancy.level:
-        lines.append(f"Уровень: {vacancy.level}")
-    if vacancy.salary_min_usd or vacancy.salary_max_usd or vacancy.salary_raw:
-        salary_parts = []
-        if vacancy.salary_min_usd or vacancy.salary_max_usd:
-            salary_parts.append(
-                f"{vacancy.salary_min_usd or ''}-{vacancy.salary_max_usd or ''} USD".strip("-")
-            )
-        if vacancy.salary_raw:
-            salary_parts.append(vacancy.salary_raw)
-        salary_text = " / ".join(part for part in salary_parts if part)
-        lines.append(f"Зарплата: {salary_text or 'не указана'}")
-    lines.append(f"Язык вакансии: {vacancy.language}")
-    source_text = vacancy.source_channel
+        loc = vacancy.location
+        if vacancy.remote_type and vacancy.remote_type != "unknown":
+            loc += f" ({vacancy.remote_type})"
+        parts.append(f"📍 {loc}")
+    if vacancy.level and vacancy.level != "other":
+        parts.append(f"💼 {vacancy.level.capitalize()}")
+    # Language always shown
+    lang_label = vacancy.language.upper() if vacancy.language != "other" else "Other"
+    parts.append(f"🌐 {lang_label}")
+    return parts
+
+
+def _format_vacancy(index: int, vacancy: VacancyNormalized) -> str:
+    """Format vacancy in compact emoji-based format."""
+    # Header with clickable link
+    title = vacancy.title or "Product Manager"
     if vacancy.source_link:
-        source_text = f"{vacancy.source_channel} — [ссылка на пост]({vacancy.source_link})"
-    lines.append(f"Источник: {source_text}")
-    if vacancy.raw_snippet:
-        lines.append("")
-        lines.append(f"Кратко: {vacancy.raw_snippet.strip()}")
+        header = f"{index}) [**{title}**]({vacancy.source_link})"
+    else:
+        header = f"{index}) **{title}**"
+
+    lines = [header]
+
+    # Metadata line with emoji
+    meta_parts = _build_metadata_parts(vacancy)
+    if meta_parts:
+        lines.append("   " + " · ".join(meta_parts))
+
+    # Salary on separate line (only if present)
+    if vacancy.salary_min_usd or vacancy.salary_max_usd:
+        salary = _format_salary(vacancy.salary_min_usd, vacancy.salary_max_usd)
+        lines.append(f"   💰 {salary}")
+    elif vacancy.salary_raw:
+        lines.append(f"   💰 {vacancy.salary_raw}")
+
+    # Apply link on separate line (only if present)
+    if vacancy.apply_link:
+        lines.append(f"   🔗 [Откликнуться]({vacancy.apply_link})")
+
     return "\n".join(lines)
 
 

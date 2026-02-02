@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Awaitable, Callable, List, Optional
 
-from telegram import Update
+from telegram import Chat, LinkPreviewOptions, Update
 from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes
 
 from job_finder.resources import messages as msg
@@ -93,10 +93,20 @@ class BotController:
             return False
         return True
 
-    async def _send_text_or_file(self, chat, text: str, filename: str, caption: str) -> None:
+    async def _send_text_or_file(
+        self,
+        chat: Chat,
+        text: str,
+        filename: str,
+        caption: str,
+        parse_mode: str | None = None,
+        disable_link_preview: bool = False,
+    ) -> None:
         if len(text) <= 3500:
-            await chat.send_message(text)
+            link_preview = LinkPreviewOptions(is_disabled=True) if disable_link_preview else None
+            await chat.send_message(text, parse_mode=parse_mode, link_preview_options=link_preview)
             return
+        # File is sent without parse_mode (markdown inside file)
         with io.BytesIO(text.encode("utf-8")) as fh:
             fh.name = filename
             await chat.send_document(document=fh, filename=filename, caption=caption)
@@ -289,6 +299,8 @@ class BotController:
             digest_text,
             "digest.md",
             "Дайджест",
+            parse_mode="Markdown",
+            disable_link_preview=True,
         )
 
     async def handle_history(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
