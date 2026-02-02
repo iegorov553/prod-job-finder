@@ -185,7 +185,7 @@ class SettingsDB(BaseModel):
     max_posts_per_batch: int = 10
     max_posts_per_run: int = 30
     hours_lookback: int = 24
-    custom_prompt: Optional[str] = None
+    custom_prompt: str  # Required, stored in database
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

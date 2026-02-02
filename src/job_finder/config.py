@@ -24,8 +24,6 @@ class Config:
     llm_base_url: str
     llm_temperature: float | None
     llm_timeout: int
-    llm_prompt_id: str | None
-    llm_prompt_version: str | None
     llm_retry_max: int
     llm_retry_backoff: float
 
@@ -87,8 +85,6 @@ def load_config(env_path: str | None = ".env") -> Config:
     llm_temperature = os.environ.get("LLM_TEMPERATURE")
     temperature_value = float(llm_temperature) if llm_temperature not in (None, "") else None
     llm_timeout = int(os.environ.get("LLM_TIMEOUT", "60"))
-    llm_prompt_id = os.environ.get("LLM_PROMPT_ID")
-    llm_prompt_version = os.environ.get("LLM_PROMPT_VERSION")
     llm_retry_max = int(os.environ.get("LLM_RETRY_MAX", "2"))
     llm_retry_backoff = float(os.environ.get("LLM_RETRY_BACKOFF", "2.0"))
 
@@ -126,8 +122,6 @@ def load_config(env_path: str | None = ".env") -> Config:
         llm_base_url=llm_base_url,
         llm_temperature=temperature_value,
         llm_timeout=llm_timeout,
-        llm_prompt_id=llm_prompt_id,
-        llm_prompt_version=llm_prompt_version,
         llm_retry_max=llm_retry_max,
         llm_retry_backoff=llm_retry_backoff,
         max_posts_per_batch=max_posts_per_batch,

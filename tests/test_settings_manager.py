@@ -8,6 +8,9 @@ from unittest.mock import MagicMock, patch
 
 from job_finder.db.models import SettingsDB
 
+# Test constant for required custom_prompt field
+TEST_PROMPT = "Test system prompt for job analysis."
+
 
 class TestSettingsManager:
     """Tests for SettingsManager class."""
@@ -45,6 +48,7 @@ class TestSettingsManager:
         db_settings = SettingsDB(
             id="test-id",
             llm_model_name="gpt-4o",
+            custom_prompt=TEST_PROMPT,
         )
 
         mock_get_settings = MagicMock(return_value=db_settings)
@@ -69,6 +73,7 @@ class TestSettingsManager:
         db_settings = SettingsDB(
             id="test-id",
             llm_model_name="gpt-4o",
+            custom_prompt=TEST_PROMPT,
         )
 
         mock_get_settings = MagicMock(return_value=db_settings)
@@ -90,6 +95,7 @@ class TestSettingsManager:
         db_settings = SettingsDB(
             id="test-id",
             llm_model_name="gpt-4o",
+            custom_prompt=TEST_PROMPT,
         )
 
         mock_get_settings = MagicMock(return_value=db_settings)
@@ -120,6 +126,7 @@ class TestSettingsManager:
         db_settings = SettingsDB(
             id="test-id",
             channels=["@ch1", "@ch2"],
+            custom_prompt=TEST_PROMPT,
         )
 
         with patch("job_finder.settings_manager.get_settings", return_value=db_settings):
@@ -139,6 +146,7 @@ class TestSettingsManager:
             llm_timeout=120,
             llm_retry_max=3,
             llm_retry_backoff=Decimal("1.5"),
+            custom_prompt=TEST_PROMPT,
         )
 
         with patch("job_finder.settings_manager.get_settings", return_value=db_settings):
@@ -154,7 +162,7 @@ class TestSettingsManager:
         assert llm_config["retry_backoff"] == 1.5
 
     def test_get_custom_prompt(self) -> None:
-        """Should return custom prompt if set."""
+        """Should return custom prompt."""
         db_settings = SettingsDB(
             id="test-id",
             custom_prompt="My custom prompt",
@@ -168,14 +176,9 @@ class TestSettingsManager:
 
         assert prompt == "My custom prompt"
 
-    def test_get_custom_prompt_none(self) -> None:
-        """Should return None when custom prompt not set."""
-        db_settings = SettingsDB(
-            id="test-id",
-            custom_prompt=None,
-        )
-
-        with patch("job_finder.settings_manager.get_settings", return_value=db_settings):
+    def test_get_custom_prompt_when_db_unavailable(self) -> None:
+        """Should return None when DB is unavailable."""
+        with patch("job_finder.settings_manager.get_settings", return_value=None):
             from job_finder.settings_manager import SettingsManager
 
             manager = SettingsManager()
@@ -189,6 +192,7 @@ class TestSettingsManager:
             id="test-id",
             scheduler_enabled=True,
             scheduler_time_utc="09:30",
+            custom_prompt=TEST_PROMPT,
         )
 
         with patch("job_finder.settings_manager.get_settings", return_value=db_settings):
@@ -207,6 +211,7 @@ class TestSettingsManager:
             max_posts_per_batch=25,
             max_posts_per_run=150,
             hours_lookback=72,
+            custom_prompt=TEST_PROMPT,
         )
 
         with patch("job_finder.settings_manager.get_settings", return_value=db_settings):
@@ -221,7 +226,7 @@ class TestSettingsManager:
 
     def test_is_supabase_available_true(self) -> None:
         """Should return True when settings can be fetched."""
-        db_settings = SettingsDB(id="test-id")
+        db_settings = SettingsDB(id="test-id", custom_prompt=TEST_PROMPT)
 
         with patch("job_finder.settings_manager.get_settings", return_value=db_settings):
             from job_finder.settings_manager import SettingsManager

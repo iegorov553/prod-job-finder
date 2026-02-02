@@ -33,9 +33,6 @@ LLM_BASE_URL=https://api.openai.com/v1
 # Optional: retries/backoff on 429/5xx (default max=2, backoff=2.0)
 # LLM_RETRY_MAX=2
 # LLM_RETRY_BACKOFF=2.0
-# Optional: OpenAI Responses prompt id/version (if using hosted prompt)
-# LLM_PROMPT_ID=pmpt_xxx
-# LLM_PROMPT_VERSION=2
 MAX_POSTS_PER_BATCH=10
 MAX_POSTS_PER_RUN=30
 HOURS_LOOKBACK=24

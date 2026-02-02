@@ -29,7 +29,7 @@ class TestGetSettings:
                 "max_posts_per_batch": 20,
                 "max_posts_per_run": 100,
                 "hours_lookback": 48,
-                "custom_prompt": None,
+                "custom_prompt": "Test system prompt",
                 "created_at": "2024-01-15T10:00:00Z",
                 "updated_at": "2024-01-15T12:00:00Z",
             }
@@ -71,6 +71,7 @@ class TestUpsertSettings:
             channels=[],
             scheduler_enabled=False,
             llm_model_name="gpt-4.1-mini",
+            custom_prompt="Test system prompt",
         )
 
         mock_client = MagicMock()
@@ -89,7 +90,7 @@ class TestUpsertSettings:
                 "max_posts_per_batch": 10,
                 "max_posts_per_run": 30,
                 "hours_lookback": 24,
-                "custom_prompt": None,
+                "custom_prompt": "Test system prompt",
                 "created_at": "2024-01-15T10:00:00Z",
                 "updated_at": "2024-01-15T12:00:00Z",
             }
@@ -119,6 +120,7 @@ class TestUpsertSettings:
             channels=[],
             scheduler_enabled=False,
             llm_model_name="gpt-4.1-mini",
+            custom_prompt="Test system prompt",
         )
 
         mock_client = MagicMock()
@@ -137,7 +139,7 @@ class TestUpsertSettings:
                 "max_posts_per_batch": 10,
                 "max_posts_per_run": 30,
                 "hours_lookback": 24,
-                "custom_prompt": None,
+                "custom_prompt": "Test system prompt",
                 "created_at": "2024-01-15T10:00:00Z",
                 "updated_at": "2024-01-15T12:00:00Z",
             }
@@ -184,7 +186,7 @@ class TestEnsureSettingsExist:
                 "max_posts_per_batch": 10,
                 "max_posts_per_run": 30,
                 "hours_lookback": 24,
-                "custom_prompt": None,
+                "custom_prompt": "Test system prompt",
                 "created_at": "2024-01-15T10:00:00Z",
                 "updated_at": "2024-01-15T10:00:00Z",
             }
@@ -259,7 +261,7 @@ class TestUpdateSettingsField:
                 "max_posts_per_batch": 10,
                 "max_posts_per_run": 30,
                 "hours_lookback": 24,
-                "custom_prompt": None,
+                "custom_prompt": "Test system prompt",
                 "created_at": "2024-01-15T10:00:00Z",
                 "updated_at": "2024-01-15T12:00:00Z",
             }

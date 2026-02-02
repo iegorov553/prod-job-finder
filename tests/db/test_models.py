@@ -9,13 +9,19 @@ from pydantic import ValidationError
 
 from job_finder.db.models import SettingsDB, SettingsUpdate
 
+# Test constant for required custom_prompt field
+TEST_PROMPT = "Test system prompt for job analysis."
+
 
 class TestSettingsDB:
     """Tests for SettingsDB model."""
 
-    def test_create_with_defaults(self) -> None:
-        """Should create SettingsDB with default values."""
-        settings = SettingsDB(id="123e4567-e89b-12d3-a456-426614174000")
+    def test_create_with_required_fields(self) -> None:
+        """Should create SettingsDB with required fields and defaults."""
+        settings = SettingsDB(
+            id="123e4567-e89b-12d3-a456-426614174000",
+            custom_prompt=TEST_PROMPT,
+        )
 
         assert settings.id == "123e4567-e89b-12d3-a456-426614174000"
         assert settings.channels == []
@@ -29,7 +35,13 @@ class TestSettingsDB:
         assert settings.max_posts_per_batch == 10
         assert settings.max_posts_per_run == 30
         assert settings.hours_lookback == 24
-        assert settings.custom_prompt is None
+        assert settings.custom_prompt == TEST_PROMPT
+
+    def test_custom_prompt_required(self) -> None:
+        """Should require custom_prompt field."""
+        with pytest.raises(ValidationError) as exc_info:
+            SettingsDB(id="test-id")
+        assert "custom_prompt" in str(exc_info.value)
 
     def test_create_from_db_response(self) -> None:
         """Should parse response from Supabase correctly."""
@@ -65,6 +77,7 @@ class TestSettingsDB:
         settings = SettingsDB(
             id="test-id",
             channels=["@ch1", "@ch2"],
+            custom_prompt=TEST_PROMPT,
         )
         assert settings.channels == ["@ch1", "@ch2"]
 
@@ -73,34 +86,49 @@ class TestSettingsDB:
         settings = SettingsDB(
             id="test-id",
             channels=None,  # type: ignore[arg-type]
+            custom_prompt=TEST_PROMPT,
         )
         assert settings.channels == []
 
     def test_validate_time_format_valid(self) -> None:
         """Should accept valid HH:MM format."""
-        settings = SettingsDB(id="test", scheduler_time_utc="09:30")
+        settings = SettingsDB(
+            id="test", scheduler_time_utc="09:30", custom_prompt=TEST_PROMPT
+        )
         assert settings.scheduler_time_utc == "09:30"
 
-        settings = SettingsDB(id="test", scheduler_time_utc="00:00")
+        settings = SettingsDB(
+            id="test", scheduler_time_utc="00:00", custom_prompt=TEST_PROMPT
+        )
         assert settings.scheduler_time_utc == "00:00"
 
-        settings = SettingsDB(id="test", scheduler_time_utc="23:59")
+        settings = SettingsDB(
+            id="test", scheduler_time_utc="23:59", custom_prompt=TEST_PROMPT
+        )
         assert settings.scheduler_time_utc == "23:59"
 
     def test_validate_time_format_invalid(self) -> None:
         """Should reject invalid time formats."""
         with pytest.raises(ValidationError) as exc_info:
-            SettingsDB(id="test", scheduler_time_utc="9:30")  # Missing leading zero
+            SettingsDB(
+                id="test", scheduler_time_utc="9:30", custom_prompt=TEST_PROMPT
+            )  # Missing leading zero
         assert "HH:MM" in str(exc_info.value)
 
         with pytest.raises(ValidationError):
-            SettingsDB(id="test", scheduler_time_utc="24:00")  # Invalid hour
+            SettingsDB(
+                id="test", scheduler_time_utc="24:00", custom_prompt=TEST_PROMPT
+            )  # Invalid hour
 
         with pytest.raises(ValidationError):
-            SettingsDB(id="test", scheduler_time_utc="12:60")  # Invalid minute
+            SettingsDB(
+                id="test", scheduler_time_utc="12:60", custom_prompt=TEST_PROMPT
+            )  # Invalid minute
 
         with pytest.raises(ValidationError):
-            SettingsDB(id="test", scheduler_time_utc="12:00:00")  # Includes seconds
+            SettingsDB(
+                id="test", scheduler_time_utc="12:00:00", custom_prompt=TEST_PROMPT
+            )  # Includes seconds
 
 
 class TestSettingsUpdate:

@@ -25,8 +25,8 @@
 - Key modules (src/job_finder):
   - Core: `config.py`, `settings_manager.py`, `scraper.py`, `llm_client.py`, `digest.py`, `scheduler.py`, `bot_control.py`
   - DB (Supabase, required): `db/client.py`, `db/models.py`, `db/posts.py`, `db/vacancies.py`, `db/channel_states.py`, `db/settings.py`
-  - Utils: `utils/locks.py`, `models.py`, `resources/messages.py`, `resources/prompts.py`
-- Database (required): Supabase PostgreSQL with tables `posts`, `vacancies`, `channel_states`, `settings`. See `migrations/001_initial_schema.sql`, `migrations/002_settings_table.sql`.
+  - Utils: `utils/locks.py`, `models.py`, `resources/messages.py`
+- Database (required): Supabase PostgreSQL with tables `posts`, `vacancies`, `channel_states`, `settings`. See `migrations/001_initial_schema.sql`, `migrations/002_settings_table.sql`, `migrations/003_require_custom_prompt.sql`.
 - Dynamic settings: LLM settings, channels, scheduler, and custom prompt can be changed via Telegram bot commands without restart.
-- Multi-vacancy: LLM extracts multiple vacancies from single post using `SYSTEM_PROMPT_MULTI_VACANCY` (or custom prompt if set).
+- Multi-vacancy: LLM extracts multiple vacancies from single post using custom_prompt from database (required).
 - Docs: see `README.md` (English) for setup, env vars, Railway usage; `.env.example` for configuration template; `Dockerfile` for production image.
