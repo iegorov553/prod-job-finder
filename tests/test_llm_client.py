@@ -4,9 +4,8 @@ from typing import Any, Dict, List
 
 import pytest
 
-from job_finder.config import Config
 from job_finder.db.models import PostDB
-from job_finder.llm_client import analyze_posts_db
+from job_finder.llm_client import LLMConfig, analyze_posts_db
 
 
 class DummyResponse:
@@ -25,29 +24,16 @@ class DummyResponse:
         return self._payload
 
 
-def _config(tmp_path) -> Config:
-    return Config(
-        telegram_api_id=1,
-        telegram_api_hash="hash",
-        telegram_session="session",
-        telegram_session_base64=None,
-        telegram_string_session=None,
-        telegram_channels=["@a"],
-        llm_api_key="key",
-        llm_model_name="model",
-        llm_base_url="https://example.com/v1",
-        llm_temperature=None,
-        llm_timeout=60,
-        llm_retry_max=2,
-        llm_retry_backoff=2.0,
+def _llm_config() -> LLMConfig:
+    return LLMConfig(
+        api_key="test-key",
+        base_url="https://example.com/v1",
+        model_name="gpt-4.1-mini",
+        temperature=None,
+        timeout=60,
+        retry_max=2,
+        retry_backoff=2.0,
         max_posts_per_batch=10,
-        max_posts_per_run=30,
-        hours_lookback=24,
-        relevant_log_path=tmp_path / "rel.jsonl",
-        bot_token="token",
-        allowed_user_ids=[1],
-        supabase_url="https://test.supabase.co",
-        supabase_key="test-key",
     )
 
 
@@ -69,7 +55,7 @@ def _make_post(post_id: int, text: str, channel: str = "@a") -> PostDB:
 CUSTOM_PROMPT = "You are an assistant that evaluates job posts."
 
 
-def test_analyze_posts_db_parses_response(monkeypatch, tmp_path) -> None:
+def test_analyze_posts_db_parses_response(monkeypatch) -> None:
     posts = [_make_post(1, "Senior PM remote 120k")]
     response_content = json.dumps(
         [
@@ -105,7 +91,7 @@ def test_analyze_posts_db_parses_response(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
     logs: List[dict] = []
-    result = analyze_posts_db(posts, _config(tmp_path), logs, custom_prompt=CUSTOM_PROMPT)
+    result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, logs)
     assert len(result) == 1
     assert result[0].post_id == 1
     assert len(result[0].vacancies) == 1
@@ -116,7 +102,7 @@ def test_analyze_posts_db_parses_response(monkeypatch, tmp_path) -> None:
     assert logs, "Logs should be collected"
 
 
-def test_analyze_posts_db_handles_bad_json(monkeypatch, tmp_path) -> None:
+def test_analyze_posts_db_handles_bad_json(monkeypatch) -> None:
     posts = [_make_post(1, "text")]
     payload = {"choices": [{"message": {"content": "not json"}}]}
 
@@ -124,25 +110,25 @@ def test_analyze_posts_db_handles_bad_json(monkeypatch, tmp_path) -> None:
         return DummyResponse(payload)
 
     monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
-    result = analyze_posts_db(posts, _config(tmp_path), [], custom_prompt=CUSTOM_PROMPT)
+    result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
     assert result == []
 
 
-def test_analyze_posts_db_empty_posts(tmp_path) -> None:
-    result = analyze_posts_db([], _config(tmp_path), [], custom_prompt=CUSTOM_PROMPT)
+def test_analyze_posts_db_empty_posts() -> None:
+    result = analyze_posts_db([], _llm_config(), CUSTOM_PROMPT, [])
     assert result == []
 
 
-def test_analyze_posts_db_requires_custom_prompt(tmp_path) -> None:
+def test_analyze_posts_db_requires_custom_prompt() -> None:
     posts = [_make_post(1, "text")]
     with pytest.raises(ValueError, match="custom_prompt is required"):
-        analyze_posts_db(posts, _config(tmp_path), [], custom_prompt=None)
+        analyze_posts_db(posts, _llm_config(), "", [])
 
     with pytest.raises(ValueError, match="custom_prompt is required"):
-        analyze_posts_db(posts, _config(tmp_path), [], custom_prompt="")
+        analyze_posts_db(posts, _llm_config(), None, [])  # type: ignore
 
 
-def test_analyze_posts_db_multiple_vacancies(monkeypatch, tmp_path) -> None:
+def test_analyze_posts_db_multiple_vacancies(monkeypatch) -> None:
     posts = [_make_post(1, "Multiple positions: PM and PO")]
     response_content = json.dumps(
         [
@@ -177,14 +163,14 @@ def test_analyze_posts_db_multiple_vacancies(monkeypatch, tmp_path) -> None:
         return DummyResponse(payload)
 
     monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
-    result = analyze_posts_db(posts, _config(tmp_path), [], custom_prompt=CUSTOM_PROMPT)
+    result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
     assert len(result) == 1
     assert len(result[0].vacancies) == 2
     assert result[0].vacancies[0].title == "Product Manager"
     assert result[0].vacancies[1].title == "Product Owner"
 
 
-def test_analyze_posts_db_legacy_format(monkeypatch, tmp_path) -> None:
+def test_analyze_posts_db_legacy_format(monkeypatch) -> None:
     """Test backward compatibility with legacy response format (flat object)."""
     posts = [_make_post(1, "Senior PM position")]
     response_content = json.dumps(
@@ -207,7 +193,7 @@ def test_analyze_posts_db_legacy_format(monkeypatch, tmp_path) -> None:
         return DummyResponse(payload)
 
     monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
-    result = analyze_posts_db(posts, _config(tmp_path), [], custom_prompt=CUSTOM_PROMPT)
+    result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
     assert len(result) == 1
     assert len(result[0].vacancies) == 1
     assert result[0].vacancies[0].title == "Senior Product Manager"

@@ -21,6 +21,7 @@ from job_finder.db.models import PostCreate, VacancyCreate
 from job_finder.db.posts import create_posts_batch, mark_posts_analyzed
 from job_finder.db.settings import ensure_settings_exist
 from job_finder.db.vacancies import create_vacancies_batch, get_new_relevant_vacancies
+from job_finder.llm_client import LLMConfig
 from job_finder.resources import messages
 from job_finder.scheduler import PipelineScheduler, SchedulerConfig
 from job_finder.settings_manager import SettingsManager, init_settings_manager
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 DIGEST_CACHE_PATH = Path("digest_last.md")
 LLM_LOG_DIR = Path("llm_logs")
-RELEVANT_LOG_DEFAULT = Path("relevant_log.jsonl")
+RELEVANT_LOG_PATH = Path("relevant_log.jsonl")
 pipeline_lock = PipelineLock()
 scheduler = PipelineScheduler()
 
@@ -46,7 +47,6 @@ def _ensure_session_file(
     base_dir: Path,
 ) -> None:
     if string_session:
-        # String session не требует файлового сохранения.
         return
     session_path = base_dir / f"{session_name}.session"
     if session_path.exists():
@@ -55,11 +55,29 @@ def _ensure_session_file(
         return
     data = base64.b64decode(session_base64)
     session_path.write_bytes(data)
-    logger.info("Восстановлен файл сессии Telethon из TELEGRAM_SESSION_BASE64.")
+    logger.info("Restored Telethon session file from TELEGRAM_SESSION_BASE64.")
+
+
+def _build_llm_config(config: Config, settings_manager: SettingsManager) -> LLMConfig:
+    """Build LLMConfig from env credentials and database settings."""
+    llm_settings = settings_manager.get_llm_config()
+    limits = settings_manager.get_processing_limits()
+
+    return LLMConfig(
+        api_key=config.llm_api_key,
+        base_url=config.llm_base_url,
+        model_name=llm_settings["model_name"],
+        temperature=llm_settings["temperature"],
+        timeout=llm_settings["timeout"],
+        retry_max=llm_settings["retry_max"],
+        retry_backoff=llm_settings["retry_backoff"],
+        max_posts_per_batch=limits["max_posts_per_batch"],
+    )
 
 
 async def _run_once(
     config: Config,
+    settings_manager: SettingsManager,
     channels: list[str],
     limit_posts: int | None = None,
     update_state: bool = True,
@@ -85,6 +103,11 @@ async def _run_once(
         Path("."),
     )
 
+    # Get settings from database
+    limits = settings_manager.get_processing_limits()
+    hours_lookback = limits["hours_lookback"]
+    max_posts_per_run = limits["max_posts_per_run"]
+
     # Ensure channel states exist in DB
     channel_states = ensure_channels_exist(channels)
     channel_state_map = {cs.channel: cs.last_message_id for cs in channel_states}
@@ -102,16 +125,16 @@ async def _run_once(
             client,
             channels,
             channel_state_map,
-            hours_lookback=config.hours_lookback,
+            hours_lookback=hours_lookback,
         )
-        effective_limit = limit_posts if limit_posts is not None else config.max_posts_per_run
+        effective_limit = limit_posts if limit_posts is not None else max_posts_per_run
         posts = posts[:effective_limit]
 
         if not posts:
             logger.info(messages.NO_NEW_MESSAGES)
             return messages.NO_NEW_MESSAGES
 
-        logger.info("Получено %s новых сообщений", len(posts))
+        logger.info("Fetched %s new messages", len(posts))
 
         # Save posts to DB
         posts_to_create = [
@@ -128,28 +151,32 @@ async def _run_once(
             for post in posts
         ]
         db_posts = create_posts_batch(posts_to_create)
-        logger.info("Сохранено %s постов в БД", len(db_posts))
+        logger.info("Saved %s posts to DB", len(db_posts))
 
         # Analyze posts with LLM (multi-vacancy)
         llm_logs: list[dict] = []
 
-        # Get custom prompt from settings manager if available
-        custom_prompt = None
-        if _settings_manager and _settings_manager.is_supabase_available():
-            custom_prompt = _settings_manager.get_custom_prompt()
+        # Get custom prompt from settings manager
+        custom_prompt = settings_manager.get_custom_prompt()
+        if not custom_prompt:
+            logger.error("custom_prompt not set in database settings")
+            return "Error: custom_prompt not configured. Use /prompt_set to configure."
+
+        # Build LLM config from credentials + settings
+        llm_config = _build_llm_config(config, settings_manager)
 
         analysis_results = llm_client.analyze_posts_db(
             db_posts,
-            config,
+            llm_config,
+            custom_prompt,
             logs=llm_logs,
             progress_cb=progress_cb,
-            custom_prompt=custom_prompt,
         )
 
         if llm_logs and not any(
             item.get("parsed_ok") for item in llm_logs if isinstance(item, dict)
         ):
-            logger.warning("LLM не вернул валидные результаты; состояние не обновляем.")
+            logger.warning("LLM returned no valid results; state not updated.")
             return "LLM rate limit or parse error. Please try again later."
 
         # Save vacancies to DB and update post analysis status
@@ -188,7 +215,7 @@ async def _run_once(
         analyzed_post_ids = [r.post_id for r in analysis_results]
         mark_posts_analyzed(analyzed_post_ids, "completed", vacancies_counts)
 
-        logger.info("Сохранено %s вакансий (%s релевантных)", total_vacancies, relevant_count)
+        logger.info("Saved %s vacancies (%s relevant)", total_vacancies, relevant_count)
 
         # Save LLM logs
         if llm_logs:
@@ -205,7 +232,7 @@ async def _run_once(
                 last_id = scraper.get_max_message_id(posts, channel)
                 if last_id is not None:
                     update_last_message_id(channel, last_id)
-                    logger.info("Обновлён last_message_id для %s: %s", channel, last_id)
+                    logger.info("Updated last_message_id for %s: %s", channel, last_id)
 
         # Build digest from new relevant vacancies in DB
         relevant_vacancies = get_new_relevant_vacancies(limit=100)
@@ -266,17 +293,15 @@ def main() -> None:
     ensure_settings_exist()
     logger.info("Settings manager initialized")
 
-    relevant_log_path = getattr(config, "relevant_log_path", RELEVANT_LOG_DEFAULT)
-
     def append_relevant(relevant_text: str, relevant_items: list[dict]) -> None:
-        relevant_log_path.parent.mkdir(parents=True, exist_ok=True)
+        RELEVANT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "count": len(relevant_items),
             "items": relevant_items,
             "digest": relevant_text,
         }
-        with relevant_log_path.open("a", encoding="utf-8") as fh:
+        with RELEVANT_LOG_PATH.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     async def run_pipeline_and_return(
@@ -290,6 +315,7 @@ def main() -> None:
             try:
                 result_text = await _run_once(
                     config,
+                    _settings_manager,
                     channels,
                     limit_posts=limit_posts,
                     update_state=update_state,
@@ -305,13 +331,11 @@ def main() -> None:
                             try:
                                 data = json.loads(log_file.read_text(encoding="utf-8"))
                                 if isinstance(data, list):
-                                    # Flatten normalized responses from the last batch
                                     for batch in data:
                                         if isinstance(batch, dict) and "response_text" in batch:
                                             try:
                                                 batch_data = json.loads(batch["response_text"])
                                                 if isinstance(batch_data, list):
-                                                    # enrich with channel id if missing
                                                     for item in batch_data:
                                                         if (
                                                             isinstance(item, dict)
@@ -332,8 +356,8 @@ def main() -> None:
                         log_file = log_files[0]
                 return RunResult(message=result_text, log_path=str(log_file) if log_file else None)
             except Exception as exc:  # noqa: BLE001
-                logger.exception("Ошибка пайплайна: %s", exc)
-                return RunResult(message=f"Ошибка пайплайна: {exc}", log_path=None)
+                logger.exception("Pipeline error: %s", exc)
+                return RunResult(message=f"Pipeline error: {exc}", log_path=None)
 
     def status_text() -> str:
         channels = _settings_manager.get_channels() if _settings_manager else []
@@ -341,15 +365,15 @@ def main() -> None:
         channel_state_map = {cs.channel: cs.last_message_id for cs in channel_states}
         scheduler_cfg = _settings_manager.get_scheduler_config() if _settings_manager else {}
 
-        lines = ["Статус:"]
-        lines.append(f"Каналы: {', '.join(channels) if channels else 'нет'}")
+        lines = ["Status:"]
+        lines.append(f"Channels: {', '.join(channels) if channels else 'none'}")
         for ch in channels:
             last_id = channel_state_map.get(ch)
             lines.append(f"{ch}: last_message_id={last_id}")
         if scheduler_cfg.get("enabled") and scheduler_cfg.get("time_utc"):
-            lines.append(f"Автозапуск: ежедневно в {scheduler_cfg['time_utc']} UTC")
+            lines.append(f"Auto-run: daily at {scheduler_cfg['time_utc']} UTC")
         else:
-            lines.append("Автозапуск: выкл")
+            lines.append("Auto-run: off")
         return "\n".join(lines)
 
     def last_digest_text() -> str:
@@ -358,9 +382,9 @@ def main() -> None:
         return ""
 
     def history_text(limit: int = 10) -> str:
-        if not relevant_log_path.exists():
+        if not RELEVANT_LOG_PATH.exists():
             return ""
-        lines = relevant_log_path.read_text(encoding="utf-8").splitlines()
+        lines = RELEVANT_LOG_PATH.read_text(encoding="utf-8").splitlines()
         lines = [ln for ln in lines if ln.strip()]
         if not lines:
             return ""
@@ -379,9 +403,9 @@ def main() -> None:
     async def update_schedule(cfg) -> str:
         scheduler.update(cfg, lambda: asyncio.create_task(run_pipeline_and_return()))
         return (
-            f"Расписание обновлено: ежедневно в {cfg.time_utc} UTC"
+            f"Schedule updated: daily at {cfg.time_utc} UTC"
             if cfg.enabled and cfg.time_utc
-            else "Автозапуск выключен."
+            else "Auto-run disabled."
         )
 
     bot = BotController(
@@ -397,7 +421,7 @@ def main() -> None:
         get_status=status_text,
         get_digest=last_digest_text,
         get_history=history_text,
-        history_file=str(relevant_log_path),
+        history_file=str(RELEVANT_LOG_PATH),
         settings_manager=_settings_manager,
     )
 

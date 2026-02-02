@@ -9,35 +9,42 @@ def test_load_config_parses_env(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("TELEGRAM_API_ID", "123")
     monkeypatch.setenv("TELEGRAM_API_HASH", "hash")
     monkeypatch.setenv("LLM_API_KEY", "key")
-    monkeypatch.setenv("TELEGRAM_CHANNELS", "@a,@b , @c")
+    monkeypatch.setenv("LLM_BASE_URL", "https://api.example.com/v1")
     monkeypatch.setenv("TELEGRAM_SESSION_BASE64", "c2Vzc2lvbg==")
     monkeypatch.setenv("TELEGRAM_STRING_SESSION", "STRING")
-    monkeypatch.setenv("LLM_TIMEOUT", "90")
-    monkeypatch.setenv("LLM_TEMPERATURE", "0.2")
-    monkeypatch.setenv("LLM_RETRY_MAX", "3")
-    monkeypatch.setenv("LLM_RETRY_BACKOFF", "1.5")
     monkeypatch.setenv("BOT_TOKEN", "token")
     monkeypatch.setenv("ALLOW_USER_IDS", "1,2")
-    monkeypatch.setenv("MAX_POSTS_PER_RUN", "30")
-    monkeypatch.setenv("RELEVANT_LOG_PATH", str(tmp_path / "relevant.jsonl"))
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
     monkeypatch.setenv("SUPABASE_KEY", "test-key")
+
     config = load_config(env_path=None)
+
     assert config.telegram_api_id == 123
     assert config.telegram_api_hash == "hash"
-    assert config.telegram_channels == ["@a", "@b", "@c"]
     assert config.telegram_session_base64 == "c2Vzc2lvbg=="
     assert config.telegram_string_session == "STRING"
-    assert config.llm_temperature == 0.2
-    assert config.llm_timeout == 90
-    assert config.llm_retry_max == 3
-    assert config.llm_retry_backoff == 1.5
-    assert config.max_posts_per_run == 30
-    assert config.relevant_log_path == tmp_path / "relevant.jsonl"
+    assert config.llm_api_key == "key"
+    assert config.llm_base_url == "https://api.example.com/v1"
     assert config.bot_token == "token"
     assert config.allowed_user_ids == [1, 2]
     assert config.supabase_url == "https://test.supabase.co"
     assert config.supabase_key == "test-key"
+
+
+def test_load_config_defaults(monkeypatch) -> None:
+    """Should use default values when optional vars not provided."""
+    monkeypatch.setenv("TELEGRAM_API_ID", "123")
+    monkeypatch.setenv("TELEGRAM_API_HASH", "hash")
+    monkeypatch.setenv("LLM_API_KEY", "key")
+    monkeypatch.setenv("BOT_TOKEN", "token")
+    monkeypatch.setenv("ALLOW_USER_IDS", "1")
+    monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "test-key")
+
+    config = load_config(env_path=None)
+
+    assert config.telegram_session == "telegram_session"
+    assert config.llm_base_url == "https://api.openai.com/v1"
 
 
 def test_load_config_missing_vars(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -3,16 +3,36 @@ from __future__ import annotations
 import json
 import logging
 import time
+from dataclasses import dataclass
 from typing import Callable, Iterable, List
 
 import requests
 
-from job_finder.config import Config
 from job_finder.db.models import PostAnalysisResult, PostDB, VacancyFromLLM
 from job_finder.models import Language, RemoteType
 from job_finder.resources.messages import ERROR_PARSING_BATCH
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class LLMConfig:
+    """Configuration for LLM API calls.
+
+    Contains credentials from env and settings from database.
+    """
+
+    # Credentials (from env)
+    api_key: str
+    base_url: str
+
+    # Settings (from database)
+    model_name: str
+    temperature: float | None
+    timeout: int
+    retry_max: int
+    retry_backoff: float
+    max_posts_per_batch: int
 
 
 def _map_language(value: str | None) -> Language:
@@ -163,10 +183,10 @@ def _chunk_posts_db(posts: List[PostDB], size: int) -> Iterable[List[PostDB]]:
 
 def analyze_posts_db(
     posts: List[PostDB],
-    config: Config,
+    llm_config: LLMConfig,
+    custom_prompt: str,
     logs: List[dict] | None = None,
     progress_cb: Callable[[int, int], None] | None = None,
-    custom_prompt: str | None = None,
 ) -> List[PostAnalysisResult]:
     """Analyze posts from database and return multi-vacancy results.
 
@@ -175,10 +195,10 @@ def analyze_posts_db(
 
     Args:
         posts: List of PostDB objects to analyze
-        config: Application configuration
+        llm_config: LLM configuration (credentials + settings)
+        custom_prompt: System prompt from database (required)
         logs: Optional list to append debug logs
         progress_cb: Optional callback for progress reporting
-        custom_prompt: System prompt from database (required)
 
     Returns:
         List of PostAnalysisResult with vacancies for each post
@@ -198,40 +218,38 @@ def analyze_posts_db(
     processed = 0
     total = len(posts)
 
-    for batch in _chunk_posts_db(posts, config.max_posts_per_batch):
+    for batch in _chunk_posts_db(posts, llm_config.max_posts_per_batch):
         user_payload = _build_user_payload_db(batch)
 
         # Use Chat Completions API only
-        url = f"{config.llm_base_url.rstrip('/')}/chat/completions"
+        url = f"{llm_config.base_url.rstrip('/')}/chat/completions"
         headers = {
-            "Authorization": f"Bearer {config.llm_api_key}",
+            "Authorization": f"Bearer {llm_config.api_key}",
             "Content-Type": "application/json",
         }
 
         body: dict = {
-            "model": config.llm_model_name,
+            "model": llm_config.model_name,
             "messages": [
                 {"role": "system", "content": custom_prompt},
                 {"role": "user", "content": user_payload},
             ],
         }
-        if config.llm_temperature is not None:
-            body["temperature"] = config.llm_temperature
+        if llm_config.temperature is not None:
+            body["temperature"] = llm_config.temperature
 
         logger.info("Sending batch to LLM: %s posts", len(batch))
         response = None
-        retry_max = getattr(config, "llm_retry_max", 0)
-        retry_backoff = getattr(config, "llm_retry_backoff", 2.0)
 
-        for attempt in range(retry_max + 1):
+        for attempt in range(llm_config.retry_max + 1):
             try:
                 response = requests.post(
-                    url, headers=headers, json=body, timeout=config.llm_timeout
+                    url, headers=headers, json=body, timeout=llm_config.timeout
                 )
                 response.raise_for_status()
                 break
             except requests.Timeout as exc:
-                logger.error("LLM timeout after %s seconds: %s", config.llm_timeout, exc)
+                logger.error("LLM timeout after %s seconds: %s", llm_config.timeout, exc)
             except requests.HTTPError as exc:
                 status = response.status_code if response is not None else None
                 logger.error(
@@ -240,8 +258,8 @@ def analyze_posts_db(
                     status,
                     response.text if response is not None else "",
                 )
-                if status in {429, 500, 502, 503, 504} and attempt < retry_max:
-                    backoff = retry_backoff * (2**attempt)
+                if status in {429, 500, 502, 503, 504} and attempt < llm_config.retry_max:
+                    backoff = llm_config.retry_backoff * (2**attempt)
                     logger.info("Retrying in %.1f sec (attempt %s)", backoff, attempt + 1)
                     time.sleep(backoff)
                     continue

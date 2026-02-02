@@ -23,9 +23,10 @@
 - Purpose: daily Telegram user-bot that fetches job posts, uses an LLM to filter for a Product Manager profile, and sends one Markdown digest to Saved Messages.
 - Entry point: `main.py` (async flow via Telethon + Bot API control bot + scheduler).
 - Key modules (src/job_finder):
-  - Core: `config.py`, `settings_manager.py`, `scraper.py`, `llm_client.py`, `digest.py`, `scheduler.py`, `bot_control.py`
+  - Core: `config.py` (credentials only), `settings_manager.py`, `scraper.py`, `llm_client.py`, `digest.py`, `scheduler.py`, `bot_control.py`
   - DB (Supabase, required): `db/client.py`, `db/models.py`, `db/posts.py`, `db/vacancies.py`, `db/channel_states.py`, `db/settings.py`
   - Utils: `utils/locks.py`, `models.py`, `resources/messages.py`
+- Configuration: env vars contain only credentials (API keys, tokens, URLs). All other settings (channels, LLM params, limits, prompt) are stored in Supabase `settings` table and managed via Telegram bot commands.
 - Database (required): Supabase PostgreSQL with tables `posts`, `vacancies`, `channel_states`, `settings`. See `migrations/001_initial_schema.sql`, `migrations/002_settings_table.sql`, `migrations/003_require_custom_prompt.sql`.
 - Dynamic settings: LLM settings, channels, scheduler, and custom prompt can be changed via Telegram bot commands without restart.
 - Multi-vacancy: LLM extracts multiple vacancies from single post using custom_prompt from database (required).
