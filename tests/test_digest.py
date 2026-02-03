@@ -52,7 +52,7 @@ def test_digest_sorts_remote_first() -> None:
 
 
 def test_format_vacancy_compact_format() -> None:
-    """Test that vacancy uses new compact emoji format."""
+    """Test that vacancy uses new compact emoji format with multi-line metadata."""
     vacancy = _sample_vacancy(
         title="Product Manager",
         company="TechCorp",
@@ -70,12 +70,16 @@ def test_format_vacancy_compact_format() -> None:
 
     # Header should be clickable link
     assert "[**Product Manager**](https://t.me/jobs/123)" in result
-    # Emoji metadata line
+    # Emoji metadata (split into multiple lines)
     assert "🏢 TechCorp" in result
     assert "🏭 EdTech" in result
     assert "📍 Berlin (hybrid)" in result
     assert "💼 Senior" in result
     assert "🌐 EN" in result
+    # Company and Industry should be on same line
+    assert "🏢 TechCorp · 🏭 EdTech" in result
+    # Location and Level should be on same line
+    assert "📍 Berlin (hybrid) · 💼 Senior" in result
     # Salary on separate line
     assert "💰 $80k–$120k" in result
     # Apply link on separate line

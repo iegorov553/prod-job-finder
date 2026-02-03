@@ -55,24 +55,36 @@ def _format_salary(salary_min: float | None, salary_max: float | None) -> str:
     return ""
 
 
-def _build_metadata_parts(vacancy: VacancyNormalized) -> list[str]:
-    """Build emoji-prefixed metadata parts for a vacancy."""
-    parts: list[str] = []
+def _build_metadata_lines(vacancy: VacancyNormalized) -> list[str]:
+    """Build metadata as multiple lines, ~2 values per line for readability."""
+    lines: list[str] = []
+
+    # Line 1: Company + Industry
+    row1: list[str] = []
     if vacancy.company and not _is_placeholder(vacancy.company):
-        parts.append(f"🏢 {vacancy.company}")
+        row1.append(f"🏢 {vacancy.company}")
     if vacancy.industry and not _is_placeholder(vacancy.industry):
-        parts.append(f"🏭 {vacancy.industry}")
+        row1.append(f"🏭 {vacancy.industry}")
+    if row1:
+        lines.append(" · ".join(row1))
+
+    # Line 2: Location + Level
+    row2: list[str] = []
     if vacancy.location and not _is_placeholder(vacancy.location):
         loc = vacancy.location
         if vacancy.remote_type and vacancy.remote_type != "unknown":
             loc += f" ({vacancy.remote_type})"
-        parts.append(f"📍 {loc}")
+        row2.append(f"📍 {loc}")
     if vacancy.level and vacancy.level != "other":
-        parts.append(f"💼 {vacancy.level.capitalize()}")
-    # Language always shown
+        row2.append(f"💼 {vacancy.level.capitalize()}")
+    if row2:
+        lines.append(" · ".join(row2))
+
+    # Line 3: Language (always shown)
     lang_label = vacancy.language.upper() if vacancy.language != "other" else "Other"
-    parts.append(f"🌐 {lang_label}")
-    return parts
+    lines.append(f"🌐 {lang_label}")
+
+    return lines
 
 
 def _format_vacancy(index: int, vacancy: VacancyNormalized) -> str:
@@ -86,10 +98,9 @@ def _format_vacancy(index: int, vacancy: VacancyNormalized) -> str:
 
     lines = [header]
 
-    # Metadata line with emoji
-    meta_parts = _build_metadata_parts(vacancy)
-    if meta_parts:
-        lines.append("   " + " · ".join(meta_parts))
+    # Metadata lines (grouped by ~2 values per line)
+    for meta_line in _build_metadata_lines(vacancy):
+        lines.append("   " + meta_line)
 
     # Salary on separate line (only if present)
     if vacancy.salary_min_usd or vacancy.salary_max_usd:

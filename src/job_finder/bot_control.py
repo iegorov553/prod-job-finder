@@ -227,6 +227,8 @@ class BotController:
             result.message,
             "result.txt",
             "Результаты сбора",
+            parse_mode="Markdown",
+            disable_link_preview=True,
         )
         if result.log_path:
             try:
@@ -270,6 +272,8 @@ class BotController:
             result.message,
             "result.txt",
             "Результаты тестового сбора",
+            parse_mode="Markdown",
+            disable_link_preview=True,
         )
         if result.log_path:
             try:
