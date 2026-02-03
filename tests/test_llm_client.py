@@ -197,3 +197,94 @@ def test_analyze_posts_db_legacy_format(monkeypatch) -> None:
     assert len(result) == 1
     assert len(result[0].vacancies) == 1
     assert result[0].vacancies[0].title == "Senior Product Manager"
+
+
+def test_analyze_posts_db_marks_failed_on_http_error(monkeypatch) -> None:
+    """Test that posts are marked as failed when LLM returns HTTP error."""
+    from unittest.mock import MagicMock, patch
+
+    posts = [_make_post(1, "Test post")]
+
+    def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
+        return DummyResponse({}, status_code=500)
+
+    mock_mark_analyzed = MagicMock(return_value=1)
+
+    monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
+    with patch("job_finder.llm_client.mark_posts_analyzed", mock_mark_analyzed):
+        result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
+
+    assert result == []
+    mock_mark_analyzed.assert_called_once()
+    call_args = mock_mark_analyzed.call_args
+    assert call_args[0][0] == [1]  # post_ids
+    assert call_args[1]["status"] == "failed"
+    assert call_args[1]["vacancies_counts"] is None
+
+
+def test_analyze_posts_db_marks_failed_on_timeout(monkeypatch) -> None:
+    """Test that posts are marked as failed when LLM times out."""
+    from unittest.mock import MagicMock, patch
+
+    import requests
+
+    posts = [_make_post(1, "Test post")]
+
+    def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
+        raise requests.Timeout("Request timed out")
+
+    mock_mark_analyzed = MagicMock(return_value=1)
+
+    monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
+    with patch("job_finder.llm_client.mark_posts_analyzed", mock_mark_analyzed):
+        result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
+
+    assert result == []
+    mock_mark_analyzed.assert_called_once()
+    call_args = mock_mark_analyzed.call_args
+    assert call_args[0][0] == [1]  # post_ids
+    assert call_args[1]["status"] == "failed"
+
+
+def test_analyze_posts_db_marks_batch_failed(monkeypatch) -> None:
+    """Test that all posts in failed batch are marked as failed."""
+    from unittest.mock import MagicMock, patch
+
+    posts = [_make_post(1, "Post 1"), _make_post(2, "Post 2"), _make_post(3, "Post 3")]
+
+    def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
+        return DummyResponse({}, status_code=429)  # Rate limit
+
+    mock_mark_analyzed = MagicMock(return_value=3)
+
+    monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
+    with patch("job_finder.llm_client.mark_posts_analyzed", mock_mark_analyzed):
+        result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
+
+    assert result == []
+    mock_mark_analyzed.assert_called_once()
+    call_args = mock_mark_analyzed.call_args
+    assert set(call_args[0][0]) == {1, 2, 3}  # all post_ids
+    assert call_args[1]["status"] == "failed"
+
+
+def test_analyze_posts_db_calls_progress_on_failed_batch(monkeypatch) -> None:
+    """Test that progress callback is called even when batch fails."""
+    from unittest.mock import MagicMock, patch
+
+    posts = [_make_post(1, "Post 1"), _make_post(2, "Post 2")]
+
+    def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
+        return DummyResponse({}, status_code=500)
+
+    mock_mark_analyzed = MagicMock(return_value=2)
+    mock_progress = MagicMock()
+
+    monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
+    with patch("job_finder.llm_client.mark_posts_analyzed", mock_mark_analyzed):
+        result = analyze_posts_db(
+            posts, _llm_config(), CUSTOM_PROMPT, [], progress_cb=mock_progress
+        )
+
+    assert result == []
+    mock_progress.assert_called_once_with(2, 2)  # processed all posts

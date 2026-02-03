@@ -9,6 +9,7 @@ from typing import Callable, Iterable, List
 import requests
 
 from job_finder.db.models import PostAnalysisResult, PostDB, VacancyFromLLM
+from job_finder.db.posts import mark_posts_analyzed
 from job_finder.models import Language, RemoteType
 from job_finder.resources.messages import ERROR_PARSING_BATCH
 
@@ -207,9 +208,7 @@ def analyze_posts_db(
         ValueError: If custom_prompt is not provided
     """
     if not custom_prompt:
-        raise ValueError(
-            "custom_prompt is required. Please set it in database settings."
-        )
+        raise ValueError("custom_prompt is required. Please set it in database settings.")
 
     if not posts:
         return []
@@ -266,12 +265,18 @@ def analyze_posts_db(
             break
 
         if response is None or response.status_code >= 400:
+            # Mark posts in failed batch as 'failed'
+            failed_post_ids = [post.id for post in batch]
+            if failed_post_ids:
+                logger.warning("Marking %s posts as failed due to LLM error", len(failed_post_ids))
+                mark_posts_analyzed(failed_post_ids, status="failed", vacancies_counts=None)
+            processed += len(batch)
+            if progress_cb is not None:
+                progress_cb(processed, total)
             continue
 
         content = response.json()
-        message_content = (
-            content.get("choices", [{}])[0].get("message", {}).get("content", "")
-        )
+        message_content = content.get("choices", [{}])[0].get("message", {}).get("content", "")
 
         if not message_content:
             message_content = response.text

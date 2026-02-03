@@ -242,3 +242,111 @@ class TestUpdatePostAnalysis:
         assert result is not None
         assert result.analysis_status == "completed"
         assert result.vacancies_count == 2
+
+
+class TestGetFailedPosts:
+    """Tests for get_failed_posts function."""
+
+    def test_get_failed_posts(self) -> None:
+        """Should return only posts with failed status."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [
+            {
+                "id": 1,
+                "telegram_id": 100,
+                "channel": "@ch",
+                "telegram_date": "2024-01-15T10:00:00Z",
+                "text_full": "Failed post",
+                "source_link": None,
+                "links": [],
+                "analyzed_at": "2024-01-15T11:00:00Z",
+                "analysis_status": "failed",
+                "vacancies_count": 0,
+                "created_at": None,
+            }
+        ]
+        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
+
+        with patch("job_finder.db.posts.get_supabase_client", return_value=mock_client):
+            from job_finder.db.posts import get_failed_posts
+
+            result = get_failed_posts(limit=10)
+
+        assert len(result) == 1
+        assert result[0].analysis_status == "failed"
+
+    def test_get_failed_posts_empty(self) -> None:
+        """Should return empty list when no failed posts exist."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = []
+        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
+
+        with patch("job_finder.db.posts.get_supabase_client", return_value=mock_client):
+            from job_finder.db.posts import get_failed_posts
+
+            result = get_failed_posts(limit=100)
+
+        assert result == []
+
+
+class TestMarkPostsAnalyzed:
+    """Tests for mark_posts_analyzed function."""
+
+    def test_mark_posts_completed(self) -> None:
+        """Should mark posts as completed with vacancies count."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [{"id": 1}]
+        mock_client.table.return_value.update.return_value.eq.return_value.execute.return_value = (
+            mock_response
+        )
+
+        with patch("job_finder.db.posts.get_supabase_client", return_value=mock_client):
+            from job_finder.db.posts import mark_posts_analyzed
+
+            count = mark_posts_analyzed([1, 2], status="completed", vacancies_counts={1: 2, 2: 1})
+
+        assert count == 2
+
+    def test_mark_posts_failed(self) -> None:
+        """Should mark posts as failed without vacancies count."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [{"id": 1}]
+        mock_client.table.return_value.update.return_value.eq.return_value.execute.return_value = (
+            mock_response
+        )
+
+        with patch("job_finder.db.posts.get_supabase_client", return_value=mock_client):
+            from job_finder.db.posts import mark_posts_analyzed
+
+            count = mark_posts_analyzed([1], status="failed", vacancies_counts=None)
+
+        assert count == 1
+
+    def test_mark_posts_pending(self) -> None:
+        """Should reset posts to pending status for retry."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [{"id": 1}]
+        mock_client.table.return_value.update.return_value.eq.return_value.execute.return_value = (
+            mock_response
+        )
+
+        with patch("job_finder.db.posts.get_supabase_client", return_value=mock_client):
+            from job_finder.db.posts import mark_posts_analyzed
+
+            count = mark_posts_analyzed([1], status="pending", vacancies_counts=None)
+
+        assert count == 1
+
+    def test_mark_posts_empty_list(self) -> None:
+        """Should return 0 for empty post list."""
+        with patch("job_finder.db.posts.get_supabase_client"):
+            from job_finder.db.posts import mark_posts_analyzed
+
+            count = mark_posts_analyzed([], status="completed", vacancies_counts=None)
+
+        assert count == 0

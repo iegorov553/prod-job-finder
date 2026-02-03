@@ -86,6 +86,8 @@ class BotController:
         self.app.add_handler(CommandHandler("prompt", self.handle_prompt))
         self.app.add_handler(CommandHandler("prompt_set", self.handle_prompt_set))
         self.app.add_handler(CommandHandler("prompt_reset", self.handle_prompt_reset))
+        # Retry commands
+        self.app.add_handler(CommandHandler("retry_failed", self.handle_retry_failed))
 
     async def _ensure_access(self, update: Update) -> bool:
         if not self._is_allowed(update):
@@ -122,6 +124,7 @@ class BotController:
             "/channels_remove @a - убрать каналы\n"
             "/run - запустить сбор сейчас\n"
             "/run_once - тестовый сбор (до 5 постов, без обновления состояния)\n"
+            "/retry_failed [limit] - повторить анализ failed постов\n"
             "/history - последние сохранённые релевантные вакансии\n"
             "/digest - показать последний дайджест\n"
             "/schedule - показать расписание\n"
@@ -687,6 +690,71 @@ class BotController:
         except Exception as e:
             logger.exception("Failed to reset custom_prompt")
             await update.effective_chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+
+    async def handle_retry_failed(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Retry analysis of failed posts."""
+        if not await self._ensure_access(update):
+            return
+        if not self.settings_manager or not self.settings_manager.is_supabase_available():
+            await update.effective_chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            return
+
+        # Parse limit from args (default 30)
+        limit = 30
+        if context.args:
+            try:
+                limit = int(context.args[0])
+                if limit < 1 or limit > 500:
+                    await update.effective_chat.send_message(msg.RETRY_FAILED_INVALID_LIMIT)
+                    return
+            except ValueError:
+                await update.effective_chat.send_message(msg.RETRY_FAILED_INVALID_LIMIT)
+                return
+
+        # Get failed posts from DB
+        from job_finder.db.posts import get_failed_posts
+
+        failed_posts = get_failed_posts(limit=limit)
+
+        if not failed_posts:
+            await update.effective_chat.send_message(msg.RETRY_FAILED_NO_POSTS)
+            return
+
+        await update.effective_chat.send_message(
+            msg.RETRY_FAILED_START.format(count=len(failed_posts))
+        )
+
+        # Reset status to pending for retry
+        from job_finder.db.posts import mark_posts_analyzed
+
+        post_ids = [p.id for p in failed_posts]
+        mark_posts_analyzed(post_ids, status="pending", vacancies_counts=None)
+
+        # Trigger analysis via on_run callback
+        last_report = {"count": 0}
+
+        def progress_cb(done: int, total: int) -> None:
+            if done == last_report["count"]:
+                return
+            last_report["count"] = done
+            progress_msg = msg.RETRY_FAILED_PROGRESS.format(done=done, total=total)
+            asyncio.create_task(update.effective_chat.send_message(progress_msg))
+
+        try:
+            result = await self.on_run(progress_cb)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Retry failed posts error: %s", exc)
+            await update.effective_chat.send_message(msg.RETRY_FAILED_ERROR.format(error=str(exc)))
+            return
+
+        await self._send_text_or_file(
+            update.effective_chat,
+            result.message,
+            "retry_result.txt",
+            msg.RETRY_FAILED_RESULT,
+            parse_mode="Markdown",
+            disable_link_preview=True,
+        )
 
     async def run_polling(self) -> None:
         await self.app.initialize()

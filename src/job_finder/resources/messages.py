@@ -52,3 +52,11 @@ PROMPT_RESET_SUCCESS = "✅ Промпт сброшен на значение п
 # Settings errors
 SETTINGS_DB_UNAVAILABLE = "❌ База данных настроек недоступна"
 SETTINGS_UPDATE_ERROR = "❌ Ошибка обновления настроек: {error}"
+
+# Retry Failed Commands
+RETRY_FAILED_START = "Повторный анализ {count} failed постов..."
+RETRY_FAILED_PROGRESS = "Идёт анализ: {done}/{total}"
+RETRY_FAILED_NO_POSTS = "Нет failed постов для повторного анализа"
+RETRY_FAILED_RESULT = "Результаты повторного анализа"
+RETRY_FAILED_ERROR = "❌ Ошибка повторного анализа: {error}"
+RETRY_FAILED_INVALID_LIMIT = "❌ Limit должен быть от 1 до 500"

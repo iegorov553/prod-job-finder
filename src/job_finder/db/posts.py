@@ -119,6 +119,23 @@ def get_pending_posts(limit: int = 100) -> List[PostDB]:
     return [PostDB.model_validate(row) for row in response.data]
 
 
+def get_failed_posts(limit: int = 100) -> List[PostDB]:
+    """Get posts that failed during LLM analysis.
+
+    Args:
+        limit: Maximum number of posts to return
+
+    Returns:
+        List of PostDB with analysis_status='failed'
+    """
+    client = get_supabase_client()
+    response = (
+        client.table(TABLE_NAME).select("*").eq("analysis_status", "failed").limit(limit).execute()
+    )
+
+    return [PostDB.model_validate(row) for row in response.data]
+
+
 def get_posts_by_ids(post_ids: List[int]) -> List[PostDB]:
     """Get multiple posts by their database IDs.
 
