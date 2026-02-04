@@ -119,22 +119,30 @@ def get_vacancies_by_status(status: str, limit: int = 100) -> List[VacancyDB]:
 
 
 def get_new_relevant_vacancies(limit: int = 100) -> List[VacancyDB]:
-    """Get new vacancies that are relevant.
+    """Get relevant vacancies created today for digest.
 
-    Combines is_relevant=True and status='new' filters.
+    Filters by is_relevant=True and created_at >= start of today (UTC).
 
     Args:
         limit: Maximum number of vacancies to return
 
     Returns:
-        List of new relevant VacancyDB objects
+        List of relevant VacancyDB objects created today
     """
+    from datetime import datetime, timezone
+
     client = get_supabase_client()
+
+    # Start of today in UTC
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start_iso = today_start.isoformat()
+
     response = (
         client.table(TABLE_NAME)
         .select("*")
         .eq("is_relevant", True)
-        .eq("status", "new")
+        .gte("created_at", today_start_iso)
+        .order("created_at", desc=True)
         .limit(limit)
         .execute()
     )

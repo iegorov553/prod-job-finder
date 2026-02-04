@@ -172,7 +172,9 @@ class TestGetRelevantVacancies:
                 "updated_at": None,
             }
         ]
-        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
+        (
+            mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value
+        ) = mock_response
 
         with patch("job_finder.db.vacancies.get_supabase_client", return_value=mock_client):
             from job_finder.db.vacancies import get_relevant_vacancies
@@ -311,7 +313,9 @@ class TestGetVacanciesByStatus:
                 "updated_at": None,
             }
         ]
-        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
+        (
+            mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value
+        ) = mock_response
 
         with patch("job_finder.db.vacancies.get_supabase_client", return_value=mock_client):
             from job_finder.db.vacancies import get_vacancies_by_status
@@ -320,3 +324,79 @@ class TestGetVacanciesByStatus:
 
         assert len(result) == 1
         assert result[0].status == "applied"
+
+
+class TestGetNewRelevantVacancies:
+    """Tests for get_new_relevant_vacancies function."""
+
+    def test_get_today_relevant_vacancies(self) -> None:
+        """Should return relevant vacancies created today."""
+        from datetime import datetime, timezone
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        now = datetime.now(timezone.utc)
+        mock_response.data = [
+            {
+                "id": 1,
+                "post_id": 10,
+                "title": "Today PM",
+                "company": "TechCorp",
+                "industry": None,
+                "level": "senior",
+                "location": "Remote",
+                "remote_type": "remote",
+                "salary_min_usd": None,
+                "salary_max_usd": None,
+                "salary_raw": None,
+                "language": "en",
+                "is_relevant": True,
+                "relevance_reason": "Great match",
+                "status": "new",
+                "apply_link": None,
+                "notes": None,
+                "cover_letter": None,
+                "raw_snippet": "Job...",
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            }
+        ]
+        (
+            mock_client.table.return_value.select.return_value.eq.return_value.gte.return_value.order.return_value.limit.return_value.execute.return_value
+        ) = mock_response
+
+        with patch("job_finder.db.vacancies.get_supabase_client", return_value=mock_client):
+            from job_finder.db.vacancies import get_new_relevant_vacancies
+
+            result = get_new_relevant_vacancies(limit=50)
+
+        assert len(result) == 1
+        assert result[0].is_relevant is True
+        assert result[0].title == "Today PM"
+
+    def test_filters_by_today_date(self) -> None:
+        """Should filter vacancies created >= start of today."""
+        from datetime import datetime, timezone
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = []
+
+        (
+            mock_client.table.return_value.select.return_value.eq.return_value.gte.return_value.order.return_value.limit.return_value.execute.return_value
+        ) = mock_response
+
+        with patch("job_finder.db.vacancies.get_supabase_client", return_value=mock_client):
+            from job_finder.db.vacancies import get_new_relevant_vacancies
+
+            get_new_relevant_vacancies(limit=100)
+
+        # Verify gte was called with created_at and today's date
+        gte_call = mock_client.table.return_value.select.return_value.eq.return_value.gte
+        gte_call.assert_called_once()
+        call_args = gte_call.call_args[0]
+
+        assert call_args[0] == "created_at"
+        # Check that the timestamp is today's start (allow small time delta)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        assert call_args[1].startswith(today_start.date().isoformat())
