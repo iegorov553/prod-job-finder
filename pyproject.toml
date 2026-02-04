@@ -10,7 +10,7 @@ packages = [{ include = "job_finder", from = "src" }]
 python = "^3.11"
 telethon = "^1.36.0"
 python-dotenv = "^1.0.1"
-requests = "^2.31.0"
+requests = "^2.32.4"
 supabase = "^2.27.2"
 pydantic = "^2.12.5"
 python-telegram-bot = "^22.6"
@@ -24,6 +24,7 @@ mypy = "^1.10.0"
 bandit = "^1.7.9"
 pip-audit = "^2.7.3"
 pre-commit = "^3.7.1"
+types-requests = "^2.32.4.20260107"
 
 [tool.ruff]
 line-length = 100
@@ -48,7 +49,7 @@ warn_return_any = true
 warn_unused_configs = true
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 addopts = "-q"
 
 [tool.bandit]

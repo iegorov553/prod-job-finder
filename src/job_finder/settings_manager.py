@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 from job_finder.db.models import SettingsDB
 from job_finder.db.settings import get_settings
@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 # Default cache TTL in seconds
 DEFAULT_CACHE_TTL = 60.0
+
+
+class SchedulerConfigDict(TypedDict):
+    enabled: bool
+    time_utc: Optional[str]
 
 
 class SettingsManagerError(Exception):
@@ -180,7 +185,7 @@ class SettingsManager:
 
     # --- Scheduler settings ---
 
-    def get_scheduler_config(self) -> Dict[str, Any]:
+    def get_scheduler_config(self) -> SchedulerConfigDict:
         """Get scheduler configuration.
 
         Returns:

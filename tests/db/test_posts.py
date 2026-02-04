@@ -192,7 +192,10 @@ class TestGetPendingPosts:
                 "created_at": None,
             }
         ]
-        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
+        select_query = (
+            mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value
+        )
+        select_query.execute.return_value = mock_response
 
         with patch("job_finder.db.posts.get_supabase_client", return_value=mock_client):
             from job_finder.db.posts import get_pending_posts
@@ -266,7 +269,10 @@ class TestGetFailedPosts:
                 "created_at": None,
             }
         ]
-        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
+        select_query = (
+            mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value
+        )
+        select_query.execute.return_value = mock_response
 
         with patch("job_finder.db.posts.get_supabase_client", return_value=mock_client):
             from job_finder.db.posts import get_failed_posts
@@ -281,7 +287,10 @@ class TestGetFailedPosts:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.data = []
-        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
+        select_query = (
+            mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value
+        )
+        select_query.execute.return_value = mock_response
 
         with patch("job_finder.db.posts.get_supabase_client", return_value=mock_client):
             from job_finder.db.posts import get_failed_posts

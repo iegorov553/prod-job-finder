@@ -7,7 +7,7 @@ Vacancies are extracted from posts by LLM analysis.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 
 from job_finder.db.client import get_supabase_client
 from job_finder.db.models import VacancyCreate, VacancyDB, VacancyUpdate
@@ -31,7 +31,7 @@ def create_vacancy(data: VacancyCreate) -> VacancyDB:
 
     response = client.table(TABLE_NAME).insert(payload).execute()
 
-    return VacancyDB.model_validate(response.data[0])
+    return cast(VacancyDB, VacancyDB.model_validate(response.data[0]))
 
 
 def create_vacancies_batch(vacancies: List[VacancyCreate]) -> List[VacancyDB]:
@@ -69,7 +69,7 @@ def get_vacancy_by_id(vacancy_id: int) -> Optional[VacancyDB]:
     if not response.data:
         return None
 
-    return VacancyDB.model_validate(response.data[0])
+    return cast(VacancyDB, VacancyDB.model_validate(response.data[0]))
 
 
 def get_vacancies_by_post_id(post_id: int) -> List[VacancyDB]:
@@ -171,7 +171,7 @@ def update_vacancy(vacancy_id: int, update: VacancyUpdate) -> Optional[VacancyDB
     if not response.data:
         return None
 
-    return VacancyDB.model_validate(response.data[0])
+    return cast(VacancyDB, VacancyDB.model_validate(response.data[0]))
 
 
 def delete_vacancies_by_post_id(post_id: int) -> int:
@@ -199,7 +199,10 @@ def count_relevant_vacancies() -> int:
     """
     client = get_supabase_client()
     response = (
-        client.table(TABLE_NAME).select("id", count="exact").eq("is_relevant", True).execute()
+        client.table(TABLE_NAME)
+        .select("id", count=cast(Any, "exact"))
+        .eq("is_relevant", True)
+        .execute()
     )
 
     return response.count or 0

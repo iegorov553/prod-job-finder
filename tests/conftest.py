@@ -2,7 +2,7 @@ import sys
 import types
 
 
-def pytest_configure(config):
+def pytest_configure(config):  # noqa: C901
     # Provide minimal stubs for telegram modules if not installed.
     if "telegram" not in sys.modules:
         telegram = types.ModuleType("telegram")

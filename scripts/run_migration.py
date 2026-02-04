@@ -29,10 +29,6 @@ def main() -> int:
         print("Error: SUPABASE_URL and SUPABASE_KEY must be set")
         return 1
 
-    from supabase import create_client
-
-    client = create_client(supabase_url, supabase_key)
-
     migrations_dir = Path(__file__).parent.parent / "migrations"
     if not migrations_dir.exists():
         print(f"Migrations directory not found: {migrations_dir}")

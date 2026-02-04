@@ -65,7 +65,7 @@ def _build_user_payload_db(posts: List[PostDB]) -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
-def _parse_multi_vacancy_response(
+def _parse_multi_vacancy_response(  # noqa: C901
     response_text: str,
     posts: List[PostDB],
 ) -> List[PostAnalysisResult]:
@@ -182,7 +182,7 @@ def _chunk_posts_db(posts: List[PostDB], size: int) -> Iterable[List[PostDB]]:
         yield posts[idx : idx + size]
 
 
-def analyze_posts_db(
+def analyze_posts_db(  # noqa: C901
     posts: List[PostDB],
     llm_config: LLMConfig,
     custom_prompt: str,

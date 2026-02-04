@@ -7,7 +7,7 @@ storing all Telegram messages fetched from channels.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 
 from job_finder.db.client import get_supabase_client
 from job_finder.db.models import PostCreate, PostDB, PostUpdate
@@ -31,7 +31,7 @@ def create_post(data: PostCreate) -> PostDB:
 
     response = client.table(TABLE_NAME).insert(payload).execute()
 
-    return PostDB.model_validate(response.data[0])
+    return cast(PostDB, PostDB.model_validate(response.data[0]))
 
 
 def create_posts_batch(posts: List[PostCreate]) -> List[PostDB]:
@@ -74,7 +74,7 @@ def get_post_by_id(post_id: int) -> Optional[PostDB]:
     if not response.data:
         return None
 
-    return PostDB.model_validate(response.data[0])
+    return cast(PostDB, PostDB.model_validate(response.data[0]))
 
 
 def get_post_by_telegram_id(channel: str, telegram_id: int) -> Optional[PostDB]:
@@ -99,7 +99,7 @@ def get_post_by_telegram_id(channel: str, telegram_id: int) -> Optional[PostDB]:
     if not response.data:
         return None
 
-    return PostDB.model_validate(response.data[0])
+    return cast(PostDB, PostDB.model_validate(response.data[0]))
 
 
 def get_pending_posts(limit: int = 100) -> List[PostDB]:
@@ -172,7 +172,7 @@ def update_post_analysis(post_id: int, update: PostUpdate) -> Optional[PostDB]:
     if not response.data:
         return None
 
-    return PostDB.model_validate(response.data[0])
+    return cast(PostDB, PostDB.model_validate(response.data[0]))
 
 
 def mark_posts_analyzed(
@@ -199,7 +199,7 @@ def mark_posts_analyzed(
     updated = 0
 
     for post_id in post_ids:
-        payload = {"analysis_status": status}
+        payload: dict[str, Any] = {"analysis_status": status}
 
         # Only set analyzed_at for completed/failed status, not for pending
         if status != "pending":

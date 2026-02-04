@@ -124,7 +124,7 @@ async def fetch_new_posts(
     ]
     collected: List[List[Message]] = await asyncio.gather(*tasks)
     posts: List[RawPost] = []
-    for channel, messages in zip(channels, collected):
+    for channel, messages in zip(channels, collected, strict=False):
         for message in messages:
             posts.append(_message_to_raw_post(channel, message))
     return posts

@@ -7,7 +7,7 @@ storing dynamic configuration that can be changed at runtime.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from job_finder.db.client import get_supabase_client
 from job_finder.db.models import SettingsDB, SettingsUpdate
@@ -31,7 +31,7 @@ def get_settings() -> Optional[SettingsDB]:
     if not response.data:
         return None
 
-    return SettingsDB.model_validate(response.data[0])
+    return cast(SettingsDB, SettingsDB.model_validate(response.data[0]))
 
 
 def upsert_settings(update: SettingsUpdate) -> Optional[SettingsDB]:
@@ -63,7 +63,7 @@ def upsert_settings(update: SettingsUpdate) -> Optional[SettingsDB]:
     if not response.data:
         return None
 
-    return SettingsDB.model_validate(response.data[0])
+    return cast(SettingsDB, SettingsDB.model_validate(response.data[0]))
 
 
 def ensure_settings_exist() -> SettingsDB:
@@ -79,16 +79,16 @@ def ensure_settings_exist() -> SettingsDB:
     response = client.table(TABLE_NAME).select("*").limit(1).execute()
 
     if response.data:
-        return SettingsDB.model_validate(response.data[0])
+        return cast(SettingsDB, SettingsDB.model_validate(response.data[0]))
 
     # Create default settings
-    default_payload = {
+    default_payload: dict[str, Any] = {
         "channels": [],
         "scheduler_enabled": False,
     }
 
     insert_response = client.table(TABLE_NAME).insert(default_payload).execute()
-    return SettingsDB.model_validate(insert_response.data[0])
+    return cast(SettingsDB, SettingsDB.model_validate(insert_response.data[0]))
 
 
 def update_settings_field(field_name: str, value: Any) -> Optional[SettingsDB]:
@@ -111,7 +111,7 @@ def update_settings_field(field_name: str, value: Any) -> Optional[SettingsDB]:
     if not response.data:
         return None
 
-    return SettingsDB.model_validate(response.data[0])
+    return cast(SettingsDB, SettingsDB.model_validate(response.data[0]))
 
 
 def reset_custom_prompt() -> Optional[SettingsDB]:
@@ -200,4 +200,4 @@ def set_scheduler(enabled: bool, time_utc: Optional[str]) -> Optional[SettingsDB
     if not response.data:
         return None
 
-    return SettingsDB.model_validate(response.data[0])
+    return cast(SettingsDB, SettingsDB.model_validate(response.data[0]))

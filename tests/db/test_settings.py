@@ -34,7 +34,8 @@ class TestGetSettings:
                 "updated_at": "2024-01-15T12:00:00Z",
             }
         ]
-        mock_client.table.return_value.select.return_value.limit.return_value.execute.return_value = mock_response
+        select_query = mock_client.table.return_value.select.return_value.limit.return_value
+        select_query.execute.return_value = mock_response
 
         with patch("job_finder.db.settings.get_supabase_client", return_value=mock_client):
             from job_finder.db.settings import get_settings
@@ -51,7 +52,8 @@ class TestGetSettings:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.data = []
-        mock_client.table.return_value.select.return_value.limit.return_value.execute.return_value = mock_response
+        select_query = mock_client.table.return_value.select.return_value.limit.return_value
+        select_query.execute.return_value = mock_response
 
         with patch("job_finder.db.settings.get_supabase_client", return_value=mock_client):
             from job_finder.db.settings import get_settings
@@ -168,7 +170,8 @@ class TestEnsureSettingsExist:
         # First call (select) returns empty
         mock_select_response = MagicMock()
         mock_select_response.data = []
-        mock_client.table.return_value.select.return_value.limit.return_value.execute.return_value = mock_select_response
+        select_query = mock_client.table.return_value.select.return_value.limit.return_value
+        select_query.execute.return_value = mock_select_response
 
         # Second call (insert) returns created settings
         mock_insert_response = MagicMock()
@@ -227,7 +230,8 @@ class TestEnsureSettingsExist:
                 "updated_at": "2024-01-15T12:00:00Z",
             }
         ]
-        mock_client.table.return_value.select.return_value.limit.return_value.execute.return_value = mock_response
+        select_query = mock_client.table.return_value.select.return_value.limit.return_value
+        select_query.execute.return_value = mock_response
 
         with patch("job_finder.db.settings.get_supabase_client", return_value=mock_client):
             from job_finder.db.settings import ensure_settings_exist

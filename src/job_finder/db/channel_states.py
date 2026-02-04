@@ -7,7 +7,7 @@ replacing the file-based state.json approach.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, cast
 
 from job_finder.db.client import get_supabase_client
 from job_finder.db.models import ChannelStateCreate, ChannelStateDB
@@ -32,7 +32,7 @@ def get_channel_state(channel: str) -> Optional[ChannelStateDB]:
     if not response.data:
         return None
 
-    return ChannelStateDB.model_validate(response.data[0])
+    return cast(ChannelStateDB, ChannelStateDB.model_validate(response.data[0]))
 
 
 def get_all_channel_states() -> List[ChannelStateDB]:
@@ -64,7 +64,7 @@ def upsert_channel_state(data: ChannelStateCreate) -> ChannelStateDB:
 
     response = client.table(TABLE_NAME).upsert(payload).execute()
 
-    return ChannelStateDB.model_validate(response.data[0])
+    return cast(ChannelStateDB, ChannelStateDB.model_validate(response.data[0]))
 
 
 def update_last_message_id(channel: str, last_message_id: int) -> ChannelStateDB:

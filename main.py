@@ -6,7 +6,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Callable, cast
 
 from job_finder import digest, llm_client, scraper
 from job_finder.bot_control import BotController, RunResult
@@ -75,7 +75,14 @@ def _build_llm_config(config: Config, settings_manager: SettingsManager) -> LLMC
     )
 
 
-async def _run_once(
+def _safe_json_loads(text: str) -> object | None:
+    try:
+        return cast(object, json.loads(text))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+
+
+async def _run_once(  # noqa: C901
     config: Config,
     settings_manager: SettingsManager,
     channels: list[str],
@@ -165,135 +172,132 @@ async def _run_once(
             logger.info("Saved %s posts to DB", len(db_posts))
             fetched_new = True
 
-        # Analyze posts with LLM (multi-vacancy)
-        llm_logs: list[dict] = []
+    # Analyze posts with LLM (multi-vacancy)
+    llm_logs: list[dict] = []
 
-        # Get custom prompt from settings manager
-        custom_prompt = settings_manager.get_custom_prompt()
-        if not custom_prompt:
-            logger.error("custom_prompt not set in database settings")
-            return "Error: custom_prompt not configured. Use /prompt_set to configure."
+    # Get custom prompt from settings manager
+    custom_prompt = settings_manager.get_custom_prompt()
+    if not custom_prompt:
+        logger.error("custom_prompt not set in database settings")
+        return "Error: custom_prompt not configured. Use /prompt_set to configure."
 
-        # Build LLM config from credentials + settings
-        llm_config = _build_llm_config(config, settings_manager)
+    # Build LLM config from credentials + settings
+    llm_config = _build_llm_config(config, settings_manager)
 
-        analysis_results = llm_client.analyze_posts_db(
-            db_posts,
-            llm_config,
-            custom_prompt,
-            logs=llm_logs,
-            progress_cb=progress_cb,
+    analysis_results = llm_client.analyze_posts_db(
+        db_posts,
+        llm_config,
+        custom_prompt,
+        logs=llm_logs,
+        progress_cb=progress_cb,
+    )
+
+    if llm_logs and not any(item.get("parsed_ok") for item in llm_logs if isinstance(item, dict)):
+        logger.warning("LLM returned no valid results; state not updated.")
+        return "LLM rate limit or parse error. Please try again later."
+
+    # Save vacancies to DB and update post analysis status
+    total_vacancies = 0
+    relevant_count = 0
+    vacancies_counts: dict[int, int] = {}
+
+    for result in analysis_results:
+        vacancies_to_create = [
+            VacancyCreate(
+                post_id=result.post_id,
+                title=v.title,
+                company=v.company,
+                industry=v.industry,
+                level=v.level,
+                location=v.location,
+                remote_type=v.remote_type or "unknown",
+                salary_min_usd=Decimal(str(v.salary_min_usd)) if v.salary_min_usd else None,
+                salary_max_usd=Decimal(str(v.salary_max_usd)) if v.salary_max_usd else None,
+                salary_raw=v.salary_raw,
+                language=v.language,
+                is_relevant=v.is_relevant,
+                relevance_reason=v.relevance_reason,
+                raw_snippet=v.raw_snippet,
+                apply_link=v.apply_link,
+            )
+            for v in result.vacancies
+        ]
+        if vacancies_to_create:
+            created = create_vacancies_batch(vacancies_to_create)
+            total_vacancies += len(created)
+            relevant_count += sum(1 for v in created if v.is_relevant)
+            vacancies_counts[result.post_id] = len(created)
+
+    # Mark posts as analyzed
+    analyzed_post_ids = [r.post_id for r in analysis_results]
+    mark_posts_analyzed(analyzed_post_ids, "completed", vacancies_counts)
+
+    logger.info("Saved %s vacancies (%s relevant)", total_vacancies, relevant_count)
+
+    # Save LLM logs
+    if llm_logs:
+        LLM_LOG_DIR.mkdir(exist_ok=True)
+        log_path = (
+            LLM_LOG_DIR / f"llm_log_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+        )
+        log_path.write_text(json.dumps(llm_logs, ensure_ascii=False, indent=2))
+
+    # Update channel states in DB (only for new posts from Telegram)
+    if update_state and fetched_new:
+        for channel in channels:
+            last_id = scraper.get_max_message_id(telegram_posts, channel)
+            if last_id is not None:
+                update_last_message_id(channel, last_id)
+                logger.info("Updated last_message_id for %s: %s", channel, last_id)
+
+    # Build digest from new relevant vacancies in DB
+    relevant_vacancies = get_new_relevant_vacancies(limit=100)
+
+    # Convert VacancyDB to VacancyNormalized for digest
+    from job_finder.models import VacancyNormalized
+
+    normalized_for_digest = []
+    for v in relevant_vacancies:
+        # Get post info for source_channel
+        from job_finder.db.posts import get_post_by_id
+
+        post = get_post_by_id(v.post_id)
+        source_channel = post.channel if post else ""
+        source_link = post.source_link if post else None
+        post_date = post.telegram_date if post else None
+
+        normalized_for_digest.append(
+            VacancyNormalized(
+                id=v.id,
+                is_relevant=v.is_relevant,
+                relevance_reason=v.relevance_reason or "",
+                title=v.title,
+                company=v.company,
+                industry=v.industry,
+                level=v.level,
+                role=None,
+                location=v.location,
+                remote_type=v.remote_type,
+                salary_min_usd=float(v.salary_min_usd) if v.salary_min_usd else None,
+                salary_max_usd=float(v.salary_max_usd) if v.salary_max_usd else None,
+                salary_raw=v.salary_raw,
+                language=v.language or "other",
+                source_channel=source_channel,
+                source_message_id=v.post_id,
+                source_link=source_link,
+                apply_link=v.apply_link,
+                raw_snippet=v.raw_snippet or "",
+                post_date=post_date,
+            )
         )
 
-        if llm_logs and not any(
-            item.get("parsed_ok") for item in llm_logs if isinstance(item, dict)
-        ):
-            logger.warning("LLM returned no valid results; state not updated.")
-            return "LLM rate limit or parse error. Please try again later."
+    digest_text = digest.build_digest(normalized_for_digest)
+    DIGEST_CACHE_PATH.write_text(digest_text)
 
-        # Save vacancies to DB and update post analysis status
-        total_vacancies = 0
-        relevant_count = 0
-        vacancies_counts: dict[int, int] = {}
-
-        for result in analysis_results:
-            vacancies_to_create = [
-                VacancyCreate(
-                    post_id=result.post_id,
-                    title=v.title,
-                    company=v.company,
-                    industry=v.industry,
-                    level=v.level,
-                    location=v.location,
-                    remote_type=v.remote_type or "unknown",
-                    salary_min_usd=Decimal(str(v.salary_min_usd)) if v.salary_min_usd else None,
-                    salary_max_usd=Decimal(str(v.salary_max_usd)) if v.salary_max_usd else None,
-                    salary_raw=v.salary_raw,
-                    language=v.language,
-                    is_relevant=v.is_relevant,
-                    relevance_reason=v.relevance_reason,
-                    raw_snippet=v.raw_snippet,
-                    apply_link=v.apply_link,
-                )
-                for v in result.vacancies
-            ]
-            if vacancies_to_create:
-                created = create_vacancies_batch(vacancies_to_create)
-                total_vacancies += len(created)
-                relevant_count += sum(1 for v in created if v.is_relevant)
-                vacancies_counts[result.post_id] = len(created)
-
-        # Mark posts as analyzed
-        analyzed_post_ids = [r.post_id for r in analysis_results]
-        mark_posts_analyzed(analyzed_post_ids, "completed", vacancies_counts)
-
-        logger.info("Saved %s vacancies (%s relevant)", total_vacancies, relevant_count)
-
-        # Save LLM logs
-        if llm_logs:
-            LLM_LOG_DIR.mkdir(exist_ok=True)
-            log_path = (
-                LLM_LOG_DIR
-                / f"llm_log_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
-            )
-            log_path.write_text(json.dumps(llm_logs, ensure_ascii=False, indent=2))
-
-        # Update channel states in DB (only for new posts from Telegram)
-        if update_state and fetched_new:
-            for channel in channels:
-                last_id = scraper.get_max_message_id(telegram_posts, channel)
-                if last_id is not None:
-                    update_last_message_id(channel, last_id)
-                    logger.info("Updated last_message_id for %s: %s", channel, last_id)
-
-        # Build digest from new relevant vacancies in DB
-        relevant_vacancies = get_new_relevant_vacancies(limit=100)
-
-        # Convert VacancyDB to VacancyNormalized for digest
-        from job_finder.models import VacancyNormalized
-
-        normalized_for_digest = []
-        for v in relevant_vacancies:
-            # Get post info for source_channel
-            from job_finder.db.posts import get_post_by_id
-
-            post = get_post_by_id(v.post_id)
-            source_channel = post.channel if post else ""
-            source_link = post.source_link if post else None
-            post_date = post.telegram_date if post else None
-
-            normalized_for_digest.append(
-                VacancyNormalized(
-                    id=v.id,
-                    is_relevant=v.is_relevant,
-                    relevance_reason=v.relevance_reason or "",
-                    title=v.title,
-                    company=v.company,
-                    industry=v.industry,
-                    level=v.level,
-                    role=None,
-                    location=v.location,
-                    remote_type=v.remote_type,
-                    salary_min_usd=float(v.salary_min_usd) if v.salary_min_usd else None,
-                    salary_max_usd=float(v.salary_max_usd) if v.salary_max_usd else None,
-                    salary_raw=v.salary_raw,
-                    language=v.language or "other",
-                    source_channel=source_channel,
-                    source_message_id=v.post_id,
-                    source_link=source_link,
-                    apply_link=v.apply_link,
-                    raw_snippet=v.raw_snippet or "",
-                    post_date=post_date,
-                )
-            )
-
-        digest_text = digest.build_digest(normalized_for_digest)
-        DIGEST_CACHE_PATH.write_text(digest_text)
-
-        return digest_text
+    return digest_text
 
 
-def main() -> None:
+def main() -> None:  # noqa: C901
     global _settings_manager
 
     config = load_config()
@@ -318,7 +322,7 @@ def main() -> None:
         with RELEVANT_LOG_PATH.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    async def run_pipeline_and_return(
+    async def run_pipeline_and_return(  # noqa: C901
         update_state: bool = True,
         limit_posts: int | None = None,
         progress_cb: Callable[[int, int], None] | None = None,
@@ -342,25 +346,20 @@ def main() -> None:
                         log_files = sorted(LLM_LOG_DIR.glob("llm_log_*.json"), reverse=True)
                         if log_files:
                             log_file = log_files[0]
-                            try:
-                                data = json.loads(log_file.read_text(encoding="utf-8"))
-                                if isinstance(data, list):
-                                    for batch in data:
-                                        if isinstance(batch, dict) and "response_text" in batch:
-                                            try:
-                                                batch_data = json.loads(batch["response_text"])
-                                                if isinstance(batch_data, list):
-                                                    for item in batch_data:
-                                                        if (
-                                                            isinstance(item, dict)
-                                                            and "source_channel" not in item
-                                                        ):
-                                                            item["source_channel"] = ""
-                                                    parsed_relevant.extend(batch_data)
-                                            except Exception:
-                                                continue
-                            except Exception:
-                                pass
+                            data = _safe_json_loads(log_file.read_text(encoding="utf-8"))
+                            if isinstance(data, list):
+                                for batch in data:
+                                    if isinstance(batch, dict) and "response_text" in batch:
+                                        batch_data = _safe_json_loads(batch["response_text"])
+                                        if not isinstance(batch_data, list):
+                                            continue
+                                        for item in batch_data:
+                                            if (
+                                                isinstance(item, dict)
+                                                and "source_channel" not in item
+                                            ):
+                                                item["source_channel"] = ""
+                                        parsed_relevant.extend(batch_data)
                     if parsed_relevant:
                         append_relevant(result_text, parsed_relevant)
                 # pick latest log file if exists
@@ -377,7 +376,11 @@ def main() -> None:
         channels = _settings_manager.get_channels() if _settings_manager else []
         channel_states = get_all_channel_states()
         channel_state_map = {cs.channel: cs.last_message_id for cs in channel_states}
-        scheduler_cfg = _settings_manager.get_scheduler_config() if _settings_manager else {}
+        scheduler_cfg = (
+            _settings_manager.get_scheduler_config()
+            if _settings_manager
+            else {"enabled": False, "time_utc": None}
+        )
 
         lines = ["Status:"]
         lines.append(f"Channels: {', '.join(channels) if channels else 'none'}")
@@ -405,17 +408,19 @@ def main() -> None:
         selected = lines[-limit:]
         parts = []
         for ln in selected:
-            try:
-                rec = json.loads(ln)
-                ts = rec.get("timestamp", "")
-                count = rec.get("count", 0)
-                parts.append(f"{ts}: {count} item(s)")
-            except Exception:
+            rec = _safe_json_loads(ln)
+            if not isinstance(rec, dict):
                 continue
+            ts = rec.get("timestamp", "")
+            count = rec.get("count", 0)
+            parts.append(f"{ts}: {count} item(s)")
         return "\n".join(parts)
 
-    async def update_schedule(cfg) -> str:
-        scheduler.update(cfg, lambda: asyncio.create_task(run_pipeline_and_return()))
+    async def run_pipeline_job() -> None:
+        asyncio.create_task(run_pipeline_and_return())
+
+    async def update_schedule(cfg: SchedulerConfig) -> str:
+        scheduler.update(cfg, run_pipeline_job)
         return (
             f"Schedule updated: daily at {cfg.time_utc} UTC"
             if cfg.enabled and cfg.time_utc
@@ -442,15 +447,16 @@ def main() -> None:
     async def serve() -> None:
         scheduler.start()
         # Load scheduler config from DB
-        scheduler_cfg = _settings_manager.get_scheduler_config() if _settings_manager else {}
+        scheduler_cfg = (
+            _settings_manager.get_scheduler_config()
+            if _settings_manager
+            else {"enabled": False, "time_utc": None}
+        )
         initial_scheduler = SchedulerConfig(
             enabled=scheduler_cfg.get("enabled", False),
             time_utc=scheduler_cfg.get("time_utc"),
         )
-        scheduler.update(
-            initial_scheduler,
-            lambda: asyncio.create_task(run_pipeline_and_return()),
-        )
+        scheduler.update(initial_scheduler, run_pipeline_job)
         try:
             await bot.run_polling()
         finally:

@@ -205,7 +205,7 @@ def test_format_vacancy_hides_empty_raw_snippet() -> None:
 
 
 def test_format_vacancy_field_order() -> None:
-    """Test that date/language and description appear in correct order with empty line before description."""
+    """Test that date/language and description are ordered with a blank line before description."""
     from datetime import datetime, timezone
 
     vacancy = _sample_vacancy(

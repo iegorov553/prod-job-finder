@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 
 class PipelineLock:
@@ -9,7 +10,7 @@ class PipelineLock:
         self._lock = asyncio.Lock()
 
     @asynccontextmanager
-    async def acquire(self):
+    async def acquire(self) -> AsyncIterator[None]:
         await self._lock.acquire()
         try:
             yield

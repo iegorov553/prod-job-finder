@@ -7,3 +7,8 @@ __pycache__/
 state.json
 *.session*
 .mcp.json
+AGENTS.md
+CLAUDE.md
+.claude/
+digest_last.md
+nul
