@@ -10,9 +10,8 @@ RUN pip install --no-cache-dir poetry
 
 WORKDIR /app
 
-COPY pyproject.toml requirements.txt ./
-RUN poetry install --no-root --only main --no-interaction --no-ansi \
-    && pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml poetry.lock* ./
+RUN poetry install --no-root --only main --no-interaction --no-ansi
 
 COPY src ./src
 COPY main.py ./
