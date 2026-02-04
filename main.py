@@ -89,7 +89,7 @@ async def _run_once(  # noqa: C901
     limit_posts: int | None = None,
     update_state: bool = True,
     progress_cb: Callable[[int, int], None] | None = None,
-) -> str:
+) -> tuple[str, bool]:
     """Run the main pipeline.
 
     Pipeline steps:
@@ -149,7 +149,7 @@ async def _run_once(  # noqa: C901
 
             if not posts:
                 logger.info(messages.NO_NEW_MESSAGES)
-                return messages.NO_NEW_MESSAGES
+                return messages.NO_NEW_MESSAGES, False
 
             logger.info("Fetched %s new messages", len(posts))
             telegram_posts = posts  # Save for channel state update
@@ -179,7 +179,7 @@ async def _run_once(  # noqa: C901
     custom_prompt = settings_manager.get_custom_prompt()
     if not custom_prompt:
         logger.error("custom_prompt not set in database settings")
-        return "Error: custom_prompt not configured. Use /prompt_set to configure."
+        return "Error: custom_prompt not configured. Use /prompt_set to configure.", False
 
     # Build LLM config from credentials + settings
     llm_config = _build_llm_config(config, settings_manager)
@@ -194,7 +194,7 @@ async def _run_once(  # noqa: C901
 
     if llm_logs and not any(item.get("parsed_ok") for item in llm_logs if isinstance(item, dict)):
         logger.warning("LLM returned no valid results; state not updated.")
-        return "LLM rate limit or parse error. Please try again later."
+        return "LLM rate limit or parse error. Please try again later.", False
 
     # Save vacancies to DB and update post analysis status
     total_vacancies = 0
@@ -294,7 +294,7 @@ async def _run_once(  # noqa: C901
     digest_text = digest.build_digest(normalized_for_digest)
     DIGEST_CACHE_PATH.write_text(digest_text)
 
-    return digest_text
+    return digest_text, True
 
 
 def main() -> None:  # noqa: C901
@@ -331,7 +331,7 @@ def main() -> None:  # noqa: C901
         log_file: Path | None = None
         async with pipeline_lock.acquire():
             try:
-                result_text = await _run_once(
+                result_text, is_markdown = await _run_once(
                     config,
                     _settings_manager,
                     channels,
@@ -367,10 +367,18 @@ def main() -> None:  # noqa: C901
                     log_files = sorted(LLM_LOG_DIR.glob("llm_log_*.json"), reverse=True)
                     if log_files:
                         log_file = log_files[0]
-                return RunResult(message=result_text, log_path=str(log_file) if log_file else None)
+                return RunResult(
+                    message=result_text,
+                    log_path=str(log_file) if log_file else None,
+                    is_markdown=is_markdown,
+                )
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Pipeline error: %s", exc)
-                return RunResult(message=f"Pipeline error: {exc}", log_path=None)
+                return RunResult(
+                    message=f"Pipeline error: {exc}",
+                    log_path=None,
+                    is_markdown=False,
+                )
 
     def status_text() -> str:
         channels = _settings_manager.get_channels() if _settings_manager else []

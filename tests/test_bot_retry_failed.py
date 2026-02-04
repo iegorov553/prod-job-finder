@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from job_finder.bot_control import BotController, RunResult
+from job_finder import telegram_markdown as mdv2
+from job_finder.bot_control import BotController, RunResult, MARKDOWN_MODE
 from job_finder.resources import messages as msg
 
 
@@ -137,7 +138,7 @@ async def test_retry_failed_empty_result_message(bot_control, mock_update, mock_
         await bot_control.handle_retry_failed(mock_update, mock_context)
 
     calls = [call[0][0] for call in mock_update.effective_chat.send_message.call_args_list]
-    assert msg.EMPTY_RESULT in calls
+    assert mdv2.escape(msg.EMPTY_RESULT) in calls
 
 
 @pytest.mark.asyncio
@@ -261,4 +262,6 @@ async def test_retry_failed_unauthorized(bot_control, mock_update, mock_context)
     await bot_control.handle_retry_failed(mock_update, mock_context)
 
     # Should send unauthorized message (via _unauthorized_reply)
-    mock_update.effective_chat.send_message.assert_called_once_with("Access denied.")
+    call = mock_update.effective_chat.send_message.call_args
+    assert call[0][0] == mdv2.escape(msg.ACCESS_DENIED)
+    assert call[1]["parse_mode"] == MARKDOWN_MODE

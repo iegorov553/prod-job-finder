@@ -4,6 +4,7 @@ from typing import List
 
 from job_finder.models import VacancyNormalized
 from job_finder.resources import messages
+from job_finder import telegram_markdown as mdv2
 
 # Placeholder values from LLM that should be treated as "no data"
 _PLACEHOLDER_VALUES = frozenset(
@@ -62,9 +63,9 @@ def _build_metadata_lines(vacancy: VacancyNormalized) -> list[str]:
     # Line 1: Company + Industry
     row1: list[str] = []
     if vacancy.company and not _is_placeholder(vacancy.company):
-        row1.append(f"🏢 {vacancy.company}")
+        row1.append(f"🏢 {mdv2.escape(vacancy.company)}")
     if vacancy.industry and not _is_placeholder(vacancy.industry):
-        row1.append(f"🏭 {vacancy.industry}")
+        row1.append(f"🏭 {mdv2.escape(vacancy.industry)}")
     if row1:
         lines.append(" · ".join(row1))
 
@@ -74,9 +75,9 @@ def _build_metadata_lines(vacancy: VacancyNormalized) -> list[str]:
         loc = vacancy.location
         if vacancy.remote_type and vacancy.remote_type != "unknown":
             loc += f" ({vacancy.remote_type})"
-        row2.append(f"📍 {loc}")
+        row2.append(f"📍 {mdv2.escape(loc)}")
     if vacancy.level and vacancy.level != "other":
-        row2.append(f"💼 {vacancy.level.capitalize()}")
+        row2.append(f"💼 {mdv2.escape(vacancy.level.capitalize())}")
     if row2:
         lines.append(" · ".join(row2))
 
@@ -88,9 +89,10 @@ def _format_vacancy(index: int, vacancy: VacancyNormalized) -> str:
     # Header with clickable link
     title = vacancy.title or "Product Manager"
     if vacancy.source_link:
-        header = f"{index}) [*{title}*]({vacancy.source_link})"
+        title_text = mdv2.bold(title)
+        header = f"{index}\\) {mdv2.link(title_text, vacancy.source_link, escape_text=False)}"
     else:
-        header = f"{index}) *{title}*"
+        header = f"{index}\\) {mdv2.bold(title)}"
 
     lines = [header]
 
@@ -101,42 +103,44 @@ def _format_vacancy(index: int, vacancy: VacancyNormalized) -> str:
     # Salary on separate line (only if present)
     if vacancy.salary_min_usd or vacancy.salary_max_usd:
         salary = _format_salary(vacancy.salary_min_usd, vacancy.salary_max_usd)
-        lines.append(f"   💰 {salary}")
+        lines.append(f"   💰 {mdv2.escape(salary)}")
     elif vacancy.salary_raw and not _is_placeholder(vacancy.salary_raw):
-        lines.append(f"   💰 {vacancy.salary_raw}")
+        lines.append(f"   💰 {mdv2.escape(vacancy.salary_raw)}")
 
     # Date and Language on same line (date first, then language)
     date_lang_parts: list[str] = []
     if vacancy.post_date:
         date_str = vacancy.post_date.strftime("%d.%m.%Y")
-        date_lang_parts.append(f"📅 {date_str}")
+        date_lang_parts.append(f"📅 {mdv2.escape(date_str)}")
     lang_label = vacancy.language.upper() if vacancy.language != "other" else "Other"
-    date_lang_parts.append(f"🌐 {lang_label}")
+    date_lang_parts.append(f"🌐 {mdv2.escape(lang_label)}")
     lines.append("   " + " · ".join(date_lang_parts))
 
     # Description on separate line with empty line before (only if present and not placeholder)
     if vacancy.raw_snippet and not _is_placeholder(vacancy.raw_snippet):
         lines.append("")  # Empty line before description
-        lines.append(f"   📝 {vacancy.raw_snippet}")
+        lines.append(f"   📝 {mdv2.escape(vacancy.raw_snippet)}")
 
     # Apply link on separate line (only if present)
     if vacancy.apply_link:
-        lines.append(f"   🔗 [Откликнуться]({vacancy.apply_link})")
+        lines.append(
+            f"   🔗 {mdv2.link(messages.APPLY_LINK_LABEL, vacancy.apply_link)}"
+        )
 
     return "\n".join(lines)
 
 
 def build_digest(vacancies: List[VacancyNormalized]) -> str:
     if not vacancies:
-        return messages.EMPTY_DIGEST
+        return mdv2.escape(messages.EMPTY_DIGEST)
     sorted_vacancies = sorted(vacancies, key=_sort_key)
     parts = [
-        messages.DIGEST_HEADER,
+        mdv2.escape(messages.DIGEST_HEADER),
         "",
-        messages.DIGEST_COUNT.format(count=len(sorted_vacancies)),
+        mdv2.escape(messages.DIGEST_COUNT.format(count=len(sorted_vacancies))),
         "",
     ]
     for idx, vacancy in enumerate(sorted_vacancies, start=1):
         parts.append(_format_vacancy(idx, vacancy))
-        parts.append("\n---\n")
+        parts.append(f"\n{mdv2.escape('---')}\n")
     return "\n".join(parts).rstrip()

@@ -17,7 +17,7 @@ This describes what happens during a single /run execution.
 
 ## Control Bot Responses
 - If an analysis run returns an empty message (for example via /retry_failed), the control bot sends a fallback message instead of failing.
-- If Telegram rejects Markdown formatting, the control bot retries sending the same text as plain text.
+- Control bot messages are formatted with Telegram MarkdownV2.
 
 ## Preview Mode
 - /run_once limits to 5 posts and does not update channel state.

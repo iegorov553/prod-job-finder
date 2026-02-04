@@ -9,9 +9,9 @@ from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Awaitable, Callable, List, Optional
 
 from telegram import Chat, LinkPreviewOptions, Update
-from telegram.error import BadRequest
 from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes
 
+from job_finder import telegram_markdown as mdv2
 from job_finder.resources import messages as msg
 from job_finder.scheduler import SchedulerConfig
 
@@ -19,17 +19,22 @@ if TYPE_CHECKING:
     from job_finder.settings_manager import SettingsManager
 
 logger = logging.getLogger(__name__)
+MARKDOWN_MODE = "MarkdownV2"
 
 
 async def _unauthorized_reply(update: Update) -> None:
     if update.effective_chat:
-        await update.effective_chat.send_message("Access denied.")
+        await update.effective_chat.send_message(
+            mdv2.escape(msg.ACCESS_DENIED),
+            parse_mode=MARKDOWN_MODE,
+        )
 
 
 @dataclass
 class RunResult:
     message: Optional[str]
     log_path: Optional[str] = None
+    is_markdown: bool = False
 
 
 class BotController:
@@ -96,37 +101,43 @@ class BotController:
             return None
         return update.effective_chat
 
+    async def _send_message(
+        self,
+        chat: Chat,
+        text: str,
+        *,
+        formatted: bool = False,
+        disable_link_preview: bool = False,
+    ) -> None:
+        message_text = text if formatted else mdv2.escape(text)
+        link_preview = LinkPreviewOptions(is_disabled=True) if disable_link_preview else None
+        await chat.send_message(
+            message_text,
+            parse_mode=MARKDOWN_MODE,
+            link_preview_options=link_preview,
+        )
+
     async def _send_text_or_file(
         self,
         chat: Chat,
         text: str | None,
         filename: str,
         caption: str,
-        parse_mode: str | None = None,
+        parse_mode: str | None = MARKDOWN_MODE,
         disable_link_preview: bool = False,
+        formatted: bool = False,
     ) -> None:
         if text is None:
             text = msg.EMPTY_RESULT
+        if parse_mode == MARKDOWN_MODE and not formatted:
+            text = mdv2.escape(text)
         if len(text) <= 3500:
             link_preview = LinkPreviewOptions(is_disabled=True) if disable_link_preview else None
-            try:
-                await chat.send_message(
-                    text,
-                    parse_mode=parse_mode,
-                    link_preview_options=link_preview,
-                )
-            except BadRequest as exc:
-                if parse_mode and "Can't parse entities" in str(exc):
-                    logger.warning(
-                        "Telegram rejected Markdown message, retrying as plain text."
-                    )
-                    await chat.send_message(
-                        text,
-                        parse_mode=None,
-                        link_preview_options=link_preview,
-                    )
-                else:
-                    raise
+            await chat.send_message(
+                text,
+                parse_mode=parse_mode,
+                link_preview_options=link_preview,
+            )
             return
         # File is sent without parse_mode (markdown inside file)
         with io.BytesIO(text.encode("utf-8")) as fh:
@@ -137,34 +148,15 @@ class BotController:
         chat = await self._ensure_access(update)
         if not chat:
             return
-        text = (
-            "/help - эта справка\n"
-            "/status - статус каналов и расписания\n"
-            "/channels - текущий список каналов\n"
-            "/channels_add @a @b - добавить каналы\n"
-            "/channels_remove @a - убрать каналы\n"
-            "/run - запустить сбор сейчас\n"
-            "/run_once - тестовый сбор (до 5 постов, без обновления состояния)\n"
-            "/retry_failed [limit] - повторить анализ failed постов\n"
-            "/history - последние сохранённые релевантные вакансии\n"
-            "/digest - показать последний дайджест\n"
-            "/schedule - показать расписание\n"
-            "/schedule_set HH:MM - ежедневный запуск по UTC\n"
-            "/schedule_off - выключить автозапуск\n\n"
-            "*LLM настройки:*\n"
-            "/llm - показать текущие настройки\n"
-            "/llm_model <name> - изменить модель\n"
-            "/llm_temp <0.0-2.0> - изменить temperature\n"
-            "/llm_timeout <10-300> - изменить timeout\n"
-            "/llm_batch <1-50> - изменить batch size\n"
-            "/llm_limit <1-500> - изменить run limit\n"
-            "/llm_lookback <1-168> - изменить hours lookback\n\n"
-            "*Промпт:*\n"
-            "/prompt - показать текущий промпт\n"
-            "/prompt_set <text> - установить промпт\n"
-            "/prompt_reset - сбросить к дефолтному"
-        )
-        await chat.send_message(text, parse_mode="Markdown")
+        lines: list[str] = []
+        lines.extend(mdv2.escape(line) for line in msg.HELP_GENERAL)
+        lines.append("")
+        lines.append(mdv2.bold(msg.HELP_LLM_HEADER))
+        lines.extend(mdv2.escape(line) for line in msg.HELP_LLM)
+        lines.append("")
+        lines.append(mdv2.bold(msg.HELP_PROMPT_HEADER))
+        lines.extend(mdv2.escape(line) for line in msg.HELP_PROMPT)
+        await self._send_message(chat, "\n".join(lines), formatted=True)
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat = await self._ensure_access(update)
@@ -182,33 +174,33 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager:
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
         channels = self.settings_manager.get_channels()
         if not channels:
-            await chat.send_message("Каналов нет.")
+            await self._send_message(chat, "Каналов нет.")
             return
-        await chat.send_message("Каналы:\n" + "\n".join(channels))
+        await self._send_message(chat, "Каналы:\n" + "\n".join(channels))
 
     async def handle_channels_add(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat = await self._ensure_access(update)
         if not chat:
             return
         if not self.settings_manager:
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
         if not context.args:
-            await chat.send_message("Укажите каналы через пробел.")
+            await self._send_message(chat, "Укажите каналы через пробел.")
             return
         try:
             from job_finder.db.settings import add_channels
 
             add_channels(list(context.args))
             self.settings_manager.invalidate_cache()
-            await chat.send_message("Добавлены:\n" + "\n".join(context.args))
+            await self._send_message(chat, "Добавлены:\n" + "\n".join(context.args))
         except Exception as e:
             logger.exception("Failed to add channels")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     async def handle_channels_remove(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -217,46 +209,46 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager:
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
         if not context.args:
-            await chat.send_message("Укажите каналы через пробел.")
+            await self._send_message(chat, "Укажите каналы через пробел.")
             return
         try:
             from job_finder.db.settings import remove_channels
 
             remove_channels(list(context.args))
             self.settings_manager.invalidate_cache()
-            await chat.send_message("Удалены:\n" + "\n".join(context.args))
+            await self._send_message(chat, "Удалены:\n" + "\n".join(context.args))
         except Exception as e:
             logger.exception("Failed to remove channels")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     async def handle_run(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat = await self._ensure_access(update)
         if not chat:
             return
-        await chat.send_message("Запускаю сбор...")
+        await self._send_message(chat, "Запускаю сбор...")
         last_report = {"count": 0}
 
         def progress_cb(done: int, total: int) -> None:
             if done == last_report["count"]:
                 return
             last_report["count"] = done
-            asyncio.create_task(chat.send_message(f"Идёт сбор: {done}/{total}"))
+            asyncio.create_task(self._send_message(chat, f"Идёт сбор: {done}/{total}"))
 
         try:
             result = await self.on_run(progress_cb)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Ошибка ручного запуска: %s", exc)
-            await chat.send_message(f"Ошибка: {exc}")
+            await self._send_message(chat, f"Ошибка: {exc}")
             return
         await self._send_text_or_file(
             chat,
             result.message,
             "result.txt",
             "Результаты сбора",
-            parse_mode="Markdown",
+            formatted=result.is_markdown,
             disable_link_preview=True,
         )
         if result.log_path:
@@ -270,7 +262,7 @@ class BotController:
                             caption="Лог LLM",
                         )
                 else:
-                    await chat.send_message("Лог LLM >20MB, не отправлен.")
+                    await self._send_message(chat, "Лог LLM >20MB, не отправлен.")
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Не удалось отправить лог: %s", exc)
             try:
@@ -282,27 +274,27 @@ class BotController:
         chat = await self._ensure_access(update)
         if not chat:
             return
-        await chat.send_message("Запускаю тестовый сбор (до 5 постов)...")
+        await self._send_message(chat, "Запускаю тестовый сбор (до 5 постов)...")
         last_report = {"count": 0}
 
         def progress_cb(done: int, total: int) -> None:
             if done == last_report["count"]:
                 return
             last_report["count"] = done
-            asyncio.create_task(chat.send_message(f"Идёт сбор: {done}/{total}"))
+            asyncio.create_task(self._send_message(chat, f"Идёт сбор: {done}/{total}"))
 
         try:
             result = await self.on_run_preview(progress_cb)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Ошибка тестового запуска: %s", exc)
-            await chat.send_message(f"Ошибка: {exc}")
+            await self._send_message(chat, f"Ошибка: {exc}")
             return
         await self._send_text_or_file(
             chat,
             result.message,
             "result.txt",
             "Результаты тестового сбора",
-            parse_mode="Markdown",
+            formatted=result.is_markdown,
             disable_link_preview=True,
         )
         if result.log_path:
@@ -316,7 +308,7 @@ class BotController:
                             caption="Лог LLM",
                         )
                 else:
-                    await chat.send_message("Лог LLM >20MB, не отправлен.")
+                    await self._send_message(chat, "Лог LLM >20MB, не отправлен.")
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Не удалось отправить лог: %s", exc)
             try:
@@ -328,13 +320,16 @@ class BotController:
         chat = await self._ensure_access(update)
         if not chat:
             return
-        digest_text = self.get_digest() or "Дайджестов пока нет."
+        digest_text = self.get_digest()
+        has_digest = bool(digest_text)
+        if not digest_text:
+            digest_text = msg.DIGEST_NOT_FOUND
         await self._send_text_or_file(
             chat,
             digest_text,
             "digest.md",
             "Дайджест",
-            parse_mode="Markdown",
+            formatted=has_digest,
             disable_link_preview=True,
         )
 
@@ -342,7 +337,7 @@ class BotController:
         chat = await self._ensure_access(update)
         if not chat:
             return
-        text = self.get_history() or "История пуста."
+        text = self.get_history() or msg.HISTORY_EMPTY
         await self._send_text_or_file(
             chat,
             text,
@@ -360,7 +355,7 @@ class BotController:
                             caption="История релевантных вакансий",
                         )
                 else:
-                    await chat.send_message("История >20MB, не отправлена.")
+                    await self._send_message(chat, "История >20MB, не отправлена.")
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Не удалось отправить историю: %s", exc)
 
@@ -369,23 +364,26 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager:
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
         scheduler_config = self.settings_manager.get_scheduler_config()
         if scheduler_config["enabled"] and scheduler_config["time_utc"]:
-            await chat.send_message(f"Расписание: ежедневно в {scheduler_config['time_utc']} UTC")
+            await self._send_message(
+                chat,
+                f"Расписание: ежедневно в {scheduler_config['time_utc']} UTC",
+            )
         else:
-            await chat.send_message("Автозапуск выключен.")
+            await self._send_message(chat, "Автозапуск выключен.")
 
     async def handle_schedule_set(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat = await self._ensure_access(update)
         if not chat:
             return
         if not self.settings_manager:
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
         if not context.args:
-            await chat.send_message("Укажите время HH:MM UTC.")
+            await self._send_message(chat, "Укажите время HH:MM UTC.")
             return
         time_value = context.args[0]
         try:
@@ -395,17 +393,17 @@ class BotController:
             self.settings_manager.invalidate_cache()
             scheduler_cfg = SchedulerConfig(enabled=True, time_utc=time_value)
             reply = await self.on_schedule_update(scheduler_cfg)
-            await chat.send_message(reply)
+            await self._send_message(chat, reply)
         except Exception as e:
             logger.exception("Failed to set scheduler")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     async def handle_schedule_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat = await self._ensure_access(update)
         if not chat:
             return
         if not self.settings_manager:
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
         try:
             from job_finder.db.settings import set_scheduler
@@ -414,10 +412,10 @@ class BotController:
             self.settings_manager.invalidate_cache()
             scheduler_cfg = SchedulerConfig(enabled=False, time_utc=None)
             reply = await self.on_schedule_update(scheduler_cfg)
-            await chat.send_message(reply)
+            await self._send_message(chat, reply)
         except Exception as e:
             logger.exception("Failed to disable scheduler")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     # --- LLM Settings Commands ---
 
@@ -427,35 +425,47 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager or not self.settings_manager.is_supabase_available():
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
 
         llm_config = self.settings_manager.get_llm_config()
         limits = self.settings_manager.get_processing_limits()
 
         lines = [
-            msg.LLM_SETTINGS_HEADER,
-            msg.LLM_SETTINGS_MODEL.format(model=llm_config["model_name"]),
+            mdv2.bold(msg.LLM_SETTINGS_HEADER),
+            f"{mdv2.escape(msg.LLM_SETTINGS_MODEL)}: {mdv2.code(str(llm_config['model_name']))}",
         ]
 
         if llm_config["temperature"] is not None:
-            lines.append(msg.LLM_SETTINGS_TEMPERATURE.format(temperature=llm_config["temperature"]))
+            lines.append(
+                f"{mdv2.escape(msg.LLM_SETTINGS_TEMPERATURE)}: "
+                f"{mdv2.code(str(llm_config['temperature']))}"
+            )
         else:
-            lines.append(msg.LLM_SETTINGS_TEMPERATURE_DEFAULT)
+            lines.append(
+                f"{mdv2.escape(msg.LLM_SETTINGS_TEMPERATURE)}: "
+                f"{mdv2.italic(msg.LLM_SETTINGS_TEMPERATURE_DEFAULT)}"
+            )
 
         lines.extend(
             [
-                msg.LLM_SETTINGS_TIMEOUT.format(timeout=llm_config["timeout"]),
-                msg.LLM_SETTINGS_RETRY_MAX.format(retry_max=llm_config["retry_max"]),
-                msg.LLM_SETTINGS_RETRY_BACKOFF.format(retry_backoff=llm_config["retry_backoff"]),
+                f"{mdv2.escape(msg.LLM_SETTINGS_TIMEOUT)}: "
+                f"{mdv2.code(str(llm_config['timeout']))} сек",
+                f"{mdv2.escape(msg.LLM_SETTINGS_RETRY_MAX)}: "
+                f"{mdv2.code(str(llm_config['retry_max']))}",
+                f"{mdv2.escape(msg.LLM_SETTINGS_RETRY_BACKOFF)}: "
+                f"{mdv2.code(str(llm_config['retry_backoff']))}",
                 "",
-                msg.LLM_SETTINGS_BATCH.format(batch=limits["max_posts_per_batch"]),
-                msg.LLM_SETTINGS_LIMIT.format(limit=limits["max_posts_per_run"]),
-                msg.LLM_SETTINGS_LOOKBACK.format(lookback=limits["hours_lookback"]),
+                f"{mdv2.escape(msg.LLM_SETTINGS_BATCH)}: "
+                f"{mdv2.code(str(limits['max_posts_per_batch']))}",
+                f"{mdv2.escape(msg.LLM_SETTINGS_LIMIT)}: "
+                f"{mdv2.code(str(limits['max_posts_per_run']))}",
+                f"{mdv2.escape(msg.LLM_SETTINGS_LOOKBACK)}: "
+                f"{mdv2.code(str(limits['hours_lookback']))}",
             ]
         )
 
-        await chat.send_message("\n".join(lines), parse_mode="Markdown")
+        await self._send_message(chat, "\n".join(lines), formatted=True)
 
     async def handle_llm_model(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Change LLM model name."""
@@ -463,11 +473,11 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager or not self.settings_manager.is_supabase_available():
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
 
         if not context.args:
-            await chat.send_message(msg.LLM_MODEL_USAGE, parse_mode="Markdown")
+            await self._send_message(chat, msg.LLM_MODEL_USAGE)
             return
 
         model_name = context.args[0]
@@ -476,13 +486,14 @@ class BotController:
 
             update_settings_field("llm_model_name", model_name)
             self.settings_manager.invalidate_cache()
-            await chat.send_message(
-                msg.LLM_MODEL_UPDATED.format(model=model_name),
-                parse_mode="Markdown",
+            await self._send_message(
+                chat,
+                msg.LLM_MODEL_UPDATED.format(model=mdv2.code(model_name)),
+                formatted=True,
             )
         except Exception as e:
             logger.exception("Failed to update llm_model_name")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     async def handle_llm_temp(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Change LLM temperature."""
@@ -490,11 +501,11 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager or not self.settings_manager.is_supabase_available():
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
 
         if not context.args:
-            await chat.send_message(msg.LLM_TEMP_USAGE, parse_mode="Markdown")
+            await self._send_message(chat, msg.LLM_TEMP_USAGE)
             return
 
         value_str = context.args[0].lower()
@@ -505,25 +516,26 @@ class BotController:
             if value_str in ("none", "default", "reset"):
                 update_settings_field("llm_temperature", None)
                 self.settings_manager.invalidate_cache()
-                await chat.send_message(msg.LLM_TEMP_RESET)
+                await self._send_message(chat, msg.LLM_TEMP_RESET)
                 return
 
             temperature = Decimal(value_str)
             if temperature < 0 or temperature > 2:
-                await chat.send_message(msg.LLM_TEMP_INVALID)
+                await self._send_message(chat, msg.LLM_TEMP_INVALID)
                 return
 
             update_settings_field("llm_temperature", float(temperature))
             self.settings_manager.invalidate_cache()
-            await chat.send_message(
-                msg.LLM_TEMP_UPDATED.format(temperature=temperature),
-                parse_mode="Markdown",
+            await self._send_message(
+                chat,
+                msg.LLM_TEMP_UPDATED.format(temperature=mdv2.code(str(temperature))),
+                formatted=True,
             )
         except InvalidOperation:
-            await chat.send_message(msg.LLM_TEMP_INVALID)
+            await self._send_message(chat, msg.LLM_TEMP_INVALID)
         except Exception as e:
             logger.exception("Failed to update llm_temperature")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     async def handle_llm_timeout(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Change LLM timeout."""
@@ -531,32 +543,33 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager or not self.settings_manager.is_supabase_available():
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
 
         if not context.args:
-            await chat.send_message(msg.LLM_TIMEOUT_USAGE, parse_mode="Markdown")
+            await self._send_message(chat, msg.LLM_TIMEOUT_USAGE)
             return
 
         try:
             timeout = int(context.args[0])
             if timeout < 10 or timeout > 300:
-                await chat.send_message(msg.LLM_TIMEOUT_INVALID)
+                await self._send_message(chat, msg.LLM_TIMEOUT_INVALID)
                 return
 
             from job_finder.db.settings import update_settings_field
 
             update_settings_field("llm_timeout", timeout)
             self.settings_manager.invalidate_cache()
-            await chat.send_message(
-                msg.LLM_TIMEOUT_UPDATED.format(timeout=timeout),
-                parse_mode="Markdown",
+            await self._send_message(
+                chat,
+                msg.LLM_TIMEOUT_UPDATED.format(timeout=mdv2.code(str(timeout))),
+                formatted=True,
             )
         except ValueError:
-            await chat.send_message(msg.LLM_TIMEOUT_INVALID)
+            await self._send_message(chat, msg.LLM_TIMEOUT_INVALID)
         except Exception as e:
             logger.exception("Failed to update llm_timeout")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     async def handle_llm_batch(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Change max_posts_per_batch."""
@@ -564,32 +577,33 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager or not self.settings_manager.is_supabase_available():
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
 
         if not context.args:
-            await chat.send_message(msg.LLM_BATCH_USAGE, parse_mode="Markdown")
+            await self._send_message(chat, msg.LLM_BATCH_USAGE)
             return
 
         try:
             batch_size = int(context.args[0])
             if batch_size < 1 or batch_size > 50:
-                await chat.send_message(msg.LLM_BATCH_INVALID)
+                await self._send_message(chat, msg.LLM_BATCH_INVALID)
                 return
 
             from job_finder.db.settings import update_settings_field
 
             update_settings_field("max_posts_per_batch", batch_size)
             self.settings_manager.invalidate_cache()
-            await chat.send_message(
-                msg.LLM_BATCH_UPDATED.format(batch=batch_size),
-                parse_mode="Markdown",
+            await self._send_message(
+                chat,
+                msg.LLM_BATCH_UPDATED.format(batch=mdv2.code(str(batch_size))),
+                formatted=True,
             )
         except ValueError:
-            await chat.send_message(msg.LLM_BATCH_INVALID)
+            await self._send_message(chat, msg.LLM_BATCH_INVALID)
         except Exception as e:
             logger.exception("Failed to update max_posts_per_batch")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     async def handle_llm_limit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Change max_posts_per_run."""
@@ -597,32 +611,33 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager or not self.settings_manager.is_supabase_available():
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
 
         if not context.args:
-            await chat.send_message(msg.LLM_LIMIT_USAGE, parse_mode="Markdown")
+            await self._send_message(chat, msg.LLM_LIMIT_USAGE)
             return
 
         try:
             run_limit = int(context.args[0])
             if run_limit < 1 or run_limit > 500:
-                await chat.send_message(msg.LLM_LIMIT_INVALID)
+                await self._send_message(chat, msg.LLM_LIMIT_INVALID)
                 return
 
             from job_finder.db.settings import update_settings_field
 
             update_settings_field("max_posts_per_run", run_limit)
             self.settings_manager.invalidate_cache()
-            await chat.send_message(
-                msg.LLM_LIMIT_UPDATED.format(limit=run_limit),
-                parse_mode="Markdown",
+            await self._send_message(
+                chat,
+                msg.LLM_LIMIT_UPDATED.format(limit=mdv2.code(str(run_limit))),
+                formatted=True,
             )
         except ValueError:
-            await chat.send_message(msg.LLM_LIMIT_INVALID)
+            await self._send_message(chat, msg.LLM_LIMIT_INVALID)
         except Exception as e:
             logger.exception("Failed to update max_posts_per_run")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     async def handle_llm_lookback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Change hours_lookback."""
@@ -630,32 +645,33 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager or not self.settings_manager.is_supabase_available():
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
 
         if not context.args:
-            await chat.send_message(msg.LLM_LOOKBACK_USAGE, parse_mode="Markdown")
+            await self._send_message(chat, msg.LLM_LOOKBACK_USAGE)
             return
 
         try:
             lookback = int(context.args[0])
             if lookback < 1 or lookback > 168:
-                await chat.send_message(msg.LLM_LOOKBACK_INVALID)
+                await self._send_message(chat, msg.LLM_LOOKBACK_INVALID)
                 return
 
             from job_finder.db.settings import update_settings_field
 
             update_settings_field("hours_lookback", lookback)
             self.settings_manager.invalidate_cache()
-            await chat.send_message(
-                msg.LLM_LOOKBACK_UPDATED.format(lookback=lookback),
-                parse_mode="Markdown",
+            await self._send_message(
+                chat,
+                msg.LLM_LOOKBACK_UPDATED.format(lookback=mdv2.code(str(lookback))),
+                formatted=True,
             )
         except ValueError:
-            await chat.send_message(msg.LLM_LOOKBACK_INVALID)
+            await self._send_message(chat, msg.LLM_LOOKBACK_INVALID)
         except Exception as e:
             logger.exception("Failed to update hours_lookback")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     # --- Prompt Commands ---
 
@@ -665,22 +681,22 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager or not self.settings_manager.is_supabase_available():
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
 
         custom_prompt = self.settings_manager.get_custom_prompt()
 
-        lines = [msg.PROMPT_HEADER]
+        lines = [mdv2.bold(msg.PROMPT_HEADER)]
         if custom_prompt:
             # Truncate for display if too long
             display_prompt = (
                 custom_prompt[:1500] + "..." if len(custom_prompt) > 1500 else custom_prompt
             )
-            lines.append(msg.PROMPT_CURRENT.format(prompt=display_prompt))
+            lines.append(mdv2.pre(display_prompt))
         else:
-            lines.append(msg.PROMPT_DEFAULT)
+            lines.append(mdv2.italic(msg.PROMPT_DEFAULT))
 
-        await chat.send_message("\n".join(lines), parse_mode="Markdown")
+        await self._send_message(chat, "\n".join(lines), formatted=True)
 
     async def handle_prompt_set(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Set custom system prompt."""
@@ -688,18 +704,18 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager or not self.settings_manager.is_supabase_available():
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
 
         if not context.args:
-            await chat.send_message(msg.PROMPT_SET_USAGE)
+            await self._send_message(chat, msg.PROMPT_SET_USAGE)
             return
 
         # Join all args as prompt text
         prompt_text = " ".join(context.args)
 
         if len(prompt_text) > 10000:
-            await chat.send_message(msg.PROMPT_SET_TOO_LONG)
+            await self._send_message(chat, msg.PROMPT_SET_TOO_LONG)
             return
 
         try:
@@ -707,10 +723,10 @@ class BotController:
 
             update_settings_field("custom_prompt", prompt_text)
             self.settings_manager.invalidate_cache()
-            await chat.send_message(msg.PROMPT_SET_SUCCESS)
+            await self._send_message(chat, msg.PROMPT_SET_SUCCESS)
         except Exception as e:
             logger.exception("Failed to update custom_prompt")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     async def handle_prompt_reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Reset to default system prompt."""
@@ -718,7 +734,7 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager or not self.settings_manager.is_supabase_available():
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
 
         try:
@@ -726,10 +742,10 @@ class BotController:
 
             reset_custom_prompt()
             self.settings_manager.invalidate_cache()
-            await chat.send_message(msg.PROMPT_RESET_SUCCESS)
+            await self._send_message(chat, msg.PROMPT_RESET_SUCCESS)
         except Exception as e:
             logger.exception("Failed to reset custom_prompt")
-            await chat.send_message(msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     async def handle_retry_failed(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Retry analysis of failed posts."""
@@ -737,7 +753,7 @@ class BotController:
         if not chat:
             return
         if not self.settings_manager or not self.settings_manager.is_supabase_available():
-            await chat.send_message(msg.SETTINGS_DB_UNAVAILABLE)
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
             return
 
         # Parse limit from args (default 30)
@@ -746,10 +762,10 @@ class BotController:
             try:
                 limit = int(context.args[0])
                 if limit < 1 or limit > 500:
-                    await chat.send_message(msg.RETRY_FAILED_INVALID_LIMIT)
+                    await self._send_message(chat, msg.RETRY_FAILED_INVALID_LIMIT)
                     return
             except ValueError:
-                await chat.send_message(msg.RETRY_FAILED_INVALID_LIMIT)
+                await self._send_message(chat, msg.RETRY_FAILED_INVALID_LIMIT)
                 return
 
         # Get failed posts from DB
@@ -758,10 +774,13 @@ class BotController:
         failed_posts = get_failed_posts(limit=limit)
 
         if not failed_posts:
-            await chat.send_message(msg.RETRY_FAILED_NO_POSTS)
+            await self._send_message(chat, msg.RETRY_FAILED_NO_POSTS)
             return
 
-        await chat.send_message(msg.RETRY_FAILED_START.format(count=len(failed_posts)))
+        await self._send_message(
+            chat,
+            msg.RETRY_FAILED_START.format(count=len(failed_posts)),
+        )
 
         # Reset status to pending for retry
         from job_finder.db.posts import mark_posts_analyzed
@@ -777,13 +796,13 @@ class BotController:
                 return
             last_report["count"] = done
             progress_msg = msg.RETRY_FAILED_PROGRESS.format(done=done, total=total)
-            asyncio.create_task(chat.send_message(progress_msg))
+            asyncio.create_task(self._send_message(chat, progress_msg))
 
         try:
             result = await self.on_run(progress_cb)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Retry failed posts error: %s", exc)
-            await chat.send_message(msg.RETRY_FAILED_ERROR.format(error=str(exc)))
+            await self._send_message(chat, msg.RETRY_FAILED_ERROR.format(error=str(exc)))
             return
 
         await self._send_text_or_file(
@@ -791,7 +810,7 @@ class BotController:
             result.message,
             "retry_result.txt",
             msg.RETRY_FAILED_RESULT,
-            parse_mode="Markdown",
+            formatted=result.is_markdown,
             disable_link_preview=True,
         )
 
