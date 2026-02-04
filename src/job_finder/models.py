@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import List, Literal, Optional
 
 Seniority = Literal["junior", "middle", "senior", "lead", "head", "other"]
@@ -44,3 +45,4 @@ class VacancyNormalized:
     apply_link: Optional[str]
 
     raw_snippet: str
+    post_date: Optional[datetime] = None

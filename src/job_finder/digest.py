@@ -109,6 +109,15 @@ def _format_vacancy(index: int, vacancy: VacancyNormalized) -> str:
     elif vacancy.salary_raw and not _is_placeholder(vacancy.salary_raw):
         lines.append(f"   💰 {vacancy.salary_raw}")
 
+    # Post date on separate line (only if present)
+    if vacancy.post_date:
+        date_str = vacancy.post_date.strftime("%d.%m.%Y")
+        lines.append(f"   📅 {date_str}")
+
+    # Description on separate line (only if present and not placeholder)
+    if vacancy.raw_snippet and not _is_placeholder(vacancy.raw_snippet):
+        lines.append(f"   📝 {vacancy.raw_snippet}")
+
     # Apply link on separate line (only if present)
     if vacancy.apply_link:
         lines.append(f"   🔗 [Откликнуться]({vacancy.apply_link})")

@@ -24,6 +24,7 @@ def _sample_vacancy(**kwargs):
         source_link="https://t.me/a/10",
         apply_link=None,
         raw_snippet="Desc",
+        post_date=None,
     )
     base.update(kwargs)
     return VacancyNormalized(**base)
@@ -159,3 +160,64 @@ def test_format_vacancy_hides_salary_not_specified() -> None:
     result = digest._format_vacancy(1, vacancy)
     assert "💰" not in result
     assert "salary not specified" not in result
+
+
+def test_format_vacancy_shows_post_date() -> None:
+    """Test that post_date is shown in DD.MM.YYYY format."""
+    from datetime import datetime, timezone
+
+    vacancy = _sample_vacancy(post_date=datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc))
+    result = digest._format_vacancy(1, vacancy)
+    assert "📅 15.01.2025" in result
+
+
+def test_format_vacancy_hides_missing_post_date() -> None:
+    """Test that post_date line is omitted when date is None."""
+    vacancy = _sample_vacancy(post_date=None)
+    result = digest._format_vacancy(1, vacancy)
+    assert "📅" not in result
+
+
+def test_format_vacancy_shows_raw_snippet() -> None:
+    """Test that raw_snippet is shown if present and not placeholder."""
+    vacancy = _sample_vacancy(raw_snippet="Looking for experienced PM to lead product strategy")
+    result = digest._format_vacancy(1, vacancy)
+    assert "📝" in result
+    assert "Looking for experienced PM" in result
+
+
+def test_format_vacancy_hides_unspecified_raw_snippet() -> None:
+    """Test that 'unspecified' raw_snippet is hidden."""
+    vacancy = _sample_vacancy(raw_snippet="unspecified")
+    result = digest._format_vacancy(1, vacancy)
+    assert "📝" not in result
+
+
+def test_format_vacancy_hides_empty_raw_snippet() -> None:
+    """Test that empty raw_snippet is hidden."""
+    vacancy = _sample_vacancy(raw_snippet="")
+    result = digest._format_vacancy(1, vacancy)
+    assert "📝" not in result
+
+
+def test_format_vacancy_field_order() -> None:
+    """Test that date and description appear in correct order."""
+    from datetime import datetime, timezone
+
+    vacancy = _sample_vacancy(
+        salary_min_usd=100000,
+        salary_max_usd=120000,
+        post_date=datetime(2025, 1, 15, tzinfo=timezone.utc),
+        raw_snippet="Great opportunity",
+        apply_link="https://apply.example.com",
+    )
+    result = digest._format_vacancy(1, vacancy)
+
+    # Find positions
+    salary_pos = result.find("💰")
+    date_pos = result.find("📅")
+    snippet_pos = result.find("📝")
+    apply_pos = result.find("🔗")
+
+    # Verify order: salary < date < snippet < apply_link
+    assert salary_pos < date_pos < snippet_pos < apply_pos

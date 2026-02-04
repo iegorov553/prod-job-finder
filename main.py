@@ -248,6 +248,7 @@ async def _run_once(
             post = get_post_by_id(v.post_id)
             source_channel = post.channel if post else ""
             source_link = post.source_link if post else None
+            post_date = post.telegram_date if post else None
 
             normalized_for_digest.append(
                 VacancyNormalized(
@@ -270,6 +271,7 @@ async def _run_once(
                     source_link=source_link,
                     apply_link=v.apply_link,
                     raw_snippet=v.raw_snippet or "",
+                    post_date=post_date,
                 )
             )
 

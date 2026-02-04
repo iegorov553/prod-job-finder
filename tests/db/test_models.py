@@ -92,19 +92,13 @@ class TestSettingsDB:
 
     def test_validate_time_format_valid(self) -> None:
         """Should accept valid HH:MM format."""
-        settings = SettingsDB(
-            id="test", scheduler_time_utc="09:30", custom_prompt=TEST_PROMPT
-        )
+        settings = SettingsDB(id="test", scheduler_time_utc="09:30", custom_prompt=TEST_PROMPT)
         assert settings.scheduler_time_utc == "09:30"
 
-        settings = SettingsDB(
-            id="test", scheduler_time_utc="00:00", custom_prompt=TEST_PROMPT
-        )
+        settings = SettingsDB(id="test", scheduler_time_utc="00:00", custom_prompt=TEST_PROMPT)
         assert settings.scheduler_time_utc == "00:00"
 
-        settings = SettingsDB(
-            id="test", scheduler_time_utc="23:59", custom_prompt=TEST_PROMPT
-        )
+        settings = SettingsDB(id="test", scheduler_time_utc="23:59", custom_prompt=TEST_PROMPT)
         assert settings.scheduler_time_utc == "23:59"
 
     def test_validate_time_format_invalid(self) -> None:
