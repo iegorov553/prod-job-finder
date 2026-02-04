@@ -103,15 +103,26 @@ def test_analyze_posts_db_parses_response(monkeypatch) -> None:
 
 
 def test_analyze_posts_db_handles_bad_json(monkeypatch) -> None:
+    """Test that posts are marked as failed when LLM returns invalid JSON (legacy test)."""
+    from unittest.mock import MagicMock, patch
+
     posts = [_make_post(1, "text")]
     payload = {"choices": [{"message": {"content": "not json"}}]}
 
     def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
         return DummyResponse(payload)
 
+    mock_mark_analyzed = MagicMock(return_value=1)
+
     monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
-    result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
+    with patch("job_finder.llm_client.mark_posts_analyzed", mock_mark_analyzed):
+        result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
+
     assert result == []
+    mock_mark_analyzed.assert_called_once()
+    call_args = mock_mark_analyzed.call_args
+    assert call_args[0][0] == [1]
+    assert call_args[1]["status"] == "failed"
 
 
 def test_analyze_posts_db_empty_posts() -> None:
@@ -288,3 +299,149 @@ def test_analyze_posts_db_calls_progress_on_failed_batch(monkeypatch) -> None:
 
     assert result == []
     mock_progress.assert_called_once_with(2, 2)  # processed all posts
+
+
+def test_analyze_posts_db_marks_failed_on_empty_content(monkeypatch) -> None:
+    """Test that posts are marked as failed when LLM returns empty message content."""
+    from unittest.mock import MagicMock, patch
+
+    posts = [_make_post(1, "Test post")]
+    # Response with empty content
+    payload = {"choices": [{"message": {"content": ""}}]}
+
+    def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
+        return DummyResponse(payload)
+
+    mock_mark_analyzed = MagicMock(return_value=1)
+
+    monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
+    with patch("job_finder.llm_client.mark_posts_analyzed", mock_mark_analyzed):
+        result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
+
+    assert result == []
+    mock_mark_analyzed.assert_called_once()
+    call_args = mock_mark_analyzed.call_args
+    assert call_args[0][0] == [1]  # post_ids
+    assert call_args[1]["status"] == "failed"
+
+
+def test_analyze_posts_db_marks_failed_on_missing_content(monkeypatch) -> None:
+    """Test that posts are marked as failed when LLM response has no content field."""
+    from unittest.mock import MagicMock, patch
+
+    posts = [_make_post(1, "Test post")]
+    # Response without content field
+    payload = {"choices": [{"message": {}}]}
+
+    def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
+        return DummyResponse(payload)
+
+    mock_mark_analyzed = MagicMock(return_value=1)
+
+    monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
+    with patch("job_finder.llm_client.mark_posts_analyzed", mock_mark_analyzed):
+        result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
+
+    assert result == []
+    mock_mark_analyzed.assert_called_once()
+    call_args = mock_mark_analyzed.call_args
+    assert call_args[0][0] == [1]
+    assert call_args[1]["status"] == "failed"
+
+
+def test_analyze_posts_db_marks_failed_on_bad_json(monkeypatch) -> None:
+    """Test that posts are marked as failed when LLM returns invalid JSON."""
+    from unittest.mock import MagicMock, patch
+
+    posts = [_make_post(1, "Test post"), _make_post(2, "Test post 2")]
+    payload = {"choices": [{"message": {"content": "not valid json {"}}]}
+
+    def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
+        return DummyResponse(payload)
+
+    mock_mark_analyzed = MagicMock(return_value=2)
+
+    monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
+    with patch("job_finder.llm_client.mark_posts_analyzed", mock_mark_analyzed):
+        result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
+
+    assert result == []
+    mock_mark_analyzed.assert_called_once()
+    call_args = mock_mark_analyzed.call_args
+    assert set(call_args[0][0]) == {1, 2}
+    assert call_args[1]["status"] == "failed"
+
+
+def test_analyze_posts_db_marks_failed_on_empty_array_response(monkeypatch) -> None:
+    """Test that posts are marked as failed when LLM returns empty array."""
+    from unittest.mock import MagicMock, patch
+
+    posts = [_make_post(1, "Test post")]
+    # Valid JSON but empty array
+    response_content = json.dumps([])
+    payload = {"choices": [{"message": {"content": response_content}}]}
+
+    def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
+        return DummyResponse(payload)
+
+    mock_mark_analyzed = MagicMock(return_value=1)
+
+    monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
+    with patch("job_finder.llm_client.mark_posts_analyzed", mock_mark_analyzed):
+        result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
+
+    assert result == []
+    mock_mark_analyzed.assert_called_once()
+    call_args = mock_mark_analyzed.call_args
+    assert call_args[0][0] == [1]
+    assert call_args[1]["status"] == "failed"
+
+
+def test_analyze_posts_db_marks_failed_on_mismatched_post_ids(monkeypatch) -> None:
+    """Test that posts are marked as failed when LLM returns data for wrong post_id."""
+    from unittest.mock import MagicMock, patch
+
+    posts = [_make_post(1, "Test post")]
+    # Response has post_id=999 instead of 1
+    response_content = json.dumps(
+        [{"post_id": 999, "vacancies": [{"is_relevant": False, "language": "en"}]}]
+    )
+    payload = {"choices": [{"message": {"content": response_content}}]}
+
+    def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
+        return DummyResponse(payload)
+
+    mock_mark_analyzed = MagicMock(return_value=1)
+
+    monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
+    with patch("job_finder.llm_client.mark_posts_analyzed", mock_mark_analyzed):
+        result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
+
+    assert result == []
+    mock_mark_analyzed.assert_called_once()
+    call_args = mock_mark_analyzed.call_args
+    assert call_args[0][0] == [1]
+    assert call_args[1]["status"] == "failed"
+
+
+def test_analyze_posts_db_progress_callback_on_parse_failure(monkeypatch) -> None:
+    """Test that progress callback is called when parsing fails."""
+    from unittest.mock import MagicMock, patch
+
+    posts = [_make_post(1, "Post 1"), _make_post(2, "Post 2")]
+    payload = {"choices": [{"message": {"content": "invalid json"}}]}
+
+    def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
+        return DummyResponse(payload)
+
+    mock_mark_analyzed = MagicMock(return_value=2)
+    mock_progress = MagicMock()
+
+    monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
+    with patch("job_finder.llm_client.mark_posts_analyzed", mock_mark_analyzed):
+        result = analyze_posts_db(
+            posts, _llm_config(), CUSTOM_PROMPT, [], progress_cb=mock_progress
+        )
+
+    assert result == []
+    mock_progress.assert_called_once_with(2, 2)  # all posts processed

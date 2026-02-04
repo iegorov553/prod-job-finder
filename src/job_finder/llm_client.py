@@ -283,6 +283,13 @@ def analyze_posts_db(  # noqa: C901
 
         if not message_content:
             logger.warning("%s: empty message content", ERROR_PARSING_BATCH)
+            # Mark posts as failed when LLM returns empty content
+            failed_post_ids = [post.id for post in batch]
+            if failed_post_ids:
+                logger.warning(
+                    "Marking %s posts as failed due to empty LLM response", len(failed_post_ids)
+                )
+                mark_posts_analyzed(failed_post_ids, status="failed", vacancies_counts=None)
             if logs is not None:
                 logs.append(
                     {
@@ -291,6 +298,9 @@ def analyze_posts_db(  # noqa: C901
                         "parsed_ok": False,
                     }
                 )
+            processed += len(batch)
+            if progress_cb is not None:
+                progress_cb(processed, total)
             continue
 
         parsed = _parse_multi_vacancy_response(message_content, batch)
@@ -303,6 +313,20 @@ def analyze_posts_db(  # noqa: C901
                     "parsed_ok": bool(parsed),
                 }
             )
+
+        # If parsing failed (empty result), mark posts as failed
+        if not parsed:
+            logger.warning("%s: parsing returned empty results for batch", ERROR_PARSING_BATCH)
+            failed_post_ids = [post.id for post in batch]
+            if failed_post_ids:
+                logger.warning(
+                    "Marking %s posts as failed due to parsing error", len(failed_post_ids)
+                )
+                mark_posts_analyzed(failed_post_ids, status="failed", vacancies_counts=None)
+            processed += len(batch)
+            if progress_cb is not None:
+                progress_cb(processed, total)
+            continue
 
         all_results.extend(parsed)
         processed += len(batch)
