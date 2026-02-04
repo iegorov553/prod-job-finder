@@ -15,5 +15,8 @@ This describes what happens during a single /run execution.
 10. Query new relevant vacancies and build the digest.
 11. Write digest to digest_last.md and send it to the user via the control bot.
 
+## Control Bot Responses
+- If an analysis run returns an empty message (for example via /retry_failed), the control bot sends a fallback message instead of failing.
+
 ## Preview Mode
 - /run_once limits to 5 posts and does not update channel state.

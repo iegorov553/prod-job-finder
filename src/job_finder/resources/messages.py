@@ -3,6 +3,7 @@ DIGEST_HEADER = "Ежедневная подборка вакансий Product 
 DIGEST_COUNT = "Найдено релевантных вакансий: {count}"
 ERROR_PARSING_BATCH = "Не удалось распарсить ответ модели для батча; посты пропущены."
 NO_NEW_MESSAGES = "Новых сообщений нет."
+EMPTY_RESULT = "Результаты отсутствуют."
 
 # LLM Settings Commands
 LLM_SETTINGS_HEADER = "⚙️ *LLM Настройки*"

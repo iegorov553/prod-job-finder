@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from job_finder.bot_control import BotController, RunResult
+from job_finder.resources import messages as msg
 
 
 @pytest.fixture
@@ -106,6 +107,37 @@ async def test_retry_failed_success(bot_control, mock_update, mock_context):
 
     # Should send start message and result
     assert mock_update.effective_chat.send_message.call_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_empty_result_message(bot_control, mock_update, mock_context):
+    """Should send fallback message when result text is missing."""
+    from datetime import datetime, timezone
+
+    from job_finder.db.models import PostDB
+
+    failed_posts = [
+        PostDB(
+            id=1,
+            telegram_id=100,
+            channel="@test",
+            telegram_date=datetime.now(timezone.utc),
+            text_full="Post 1",
+            analysis_status="failed",
+            vacancies_count=0,
+        ),
+    ]
+
+    bot_control.on_run = AsyncMock(return_value=RunResult(message=None))
+
+    with (
+        patch("job_finder.db.posts.get_failed_posts", return_value=failed_posts),
+        patch("job_finder.db.posts.mark_posts_analyzed", MagicMock(return_value=1)),
+    ):
+        await bot_control.handle_retry_failed(mock_update, mock_context)
+
+    calls = [call[0][0] for call in mock_update.effective_chat.send_message.call_args_list]
+    assert msg.EMPTY_RESULT in calls
 
 
 @pytest.mark.asyncio

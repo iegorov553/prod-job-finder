@@ -27,7 +27,7 @@ async def _unauthorized_reply(update: Update) -> None:
 
 @dataclass
 class RunResult:
-    message: str
+    message: Optional[str]
     log_path: Optional[str] = None
 
 
@@ -98,12 +98,14 @@ class BotController:
     async def _send_text_or_file(
         self,
         chat: Chat,
-        text: str,
+        text: str | None,
         filename: str,
         caption: str,
         parse_mode: str | None = None,
         disable_link_preview: bool = False,
     ) -> None:
+        if text is None:
+            text = msg.EMPTY_RESULT
         if len(text) <= 3500:
             link_preview = LinkPreviewOptions(is_disabled=True) if disable_link_preview else None
             await chat.send_message(text, parse_mode=parse_mode, link_preview_options=link_preview)
