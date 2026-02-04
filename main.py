@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, cast
 
-from job_finder import digest, llm_client, scraper
+from job_finder import digest_service, llm_client, scraper
 from job_finder.bot_control import BotController, RunResult
 from job_finder.config import Config, load_config
 from job_finder.db import init_supabase
@@ -20,7 +20,7 @@ from job_finder.db.channel_states import (
 from job_finder.db.models import PostCreate, VacancyCreate
 from job_finder.db.posts import create_posts_batch, mark_posts_analyzed
 from job_finder.db.settings import ensure_settings_exist
-from job_finder.db.vacancies import create_vacancies_batch, get_new_relevant_vacancies
+from job_finder.db.vacancies import create_vacancies_batch
 from job_finder.llm_client import LLMConfig
 from job_finder.resources import messages
 from job_finder.scheduler import PipelineScheduler, SchedulerConfig
@@ -30,7 +30,6 @@ from job_finder.utils.locks import PipelineLock
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-DIGEST_CACHE_PATH = Path("digest_last.md")
 LLM_LOG_DIR = Path("llm_logs")
 RELEVANT_LOG_PATH = Path("relevant_log.jsonl")
 pipeline_lock = PipelineLock()
@@ -250,49 +249,7 @@ async def _run_once(  # noqa: C901
                 update_last_message_id(channel, last_id)
                 logger.info("Updated last_message_id for %s: %s", channel, last_id)
 
-    # Build digest from new relevant vacancies in DB
-    relevant_vacancies = get_new_relevant_vacancies(limit=100)
-
-    # Convert VacancyDB to VacancyNormalized for digest
-    from job_finder.models import VacancyNormalized
-
-    normalized_for_digest = []
-    for v in relevant_vacancies:
-        # Get post info for source_channel
-        from job_finder.db.posts import get_post_by_id
-
-        post = get_post_by_id(v.post_id)
-        source_channel = post.channel if post else ""
-        source_link = post.source_link if post else None
-        post_date = post.telegram_date if post else None
-
-        normalized_for_digest.append(
-            VacancyNormalized(
-                id=v.id,
-                is_relevant=v.is_relevant,
-                relevance_reason=v.relevance_reason or "",
-                title=v.title,
-                company=v.company,
-                industry=v.industry,
-                level=v.level,
-                role=None,
-                location=v.location,
-                remote_type=v.remote_type,
-                salary_min_usd=float(v.salary_min_usd) if v.salary_min_usd else None,
-                salary_max_usd=float(v.salary_max_usd) if v.salary_max_usd else None,
-                salary_raw=v.salary_raw,
-                language=v.language or "other",
-                source_channel=source_channel,
-                source_message_id=v.post_id,
-                source_link=source_link,
-                apply_link=v.apply_link,
-                raw_snippet=v.raw_snippet or "",
-                post_date=post_date,
-            )
-        )
-
-    digest_text = digest.build_digest(normalized_for_digest)
-    DIGEST_CACHE_PATH.write_text(digest_text)
+    digest_text = digest_service.build_digest_from_db(limit=100)
 
     return digest_text, True
 
@@ -401,10 +358,8 @@ def main() -> None:  # noqa: C901
             lines.append("Auto-run: off")
         return "\n".join(lines)
 
-    def last_digest_text() -> str:
-        if DIGEST_CACHE_PATH.exists():
-            return DIGEST_CACHE_PATH.read_text()
-        return ""
+    def build_digest_text() -> str:
+        return digest_service.build_digest_from_db(limit=100)
 
     def history_text(limit: int = 10) -> str:
         if not RELEVANT_LOG_PATH.exists():
@@ -446,7 +401,7 @@ def main() -> None:  # noqa: C901
         ),
         on_schedule_update=update_schedule,
         get_status=status_text,
-        get_digest=last_digest_text,
+        get_digest=build_digest_text,
         get_history=history_text,
         history_file=str(RELEVANT_LOG_PATH),
         settings_manager=_settings_manager,

@@ -13,7 +13,7 @@ This describes what happens during a single /run execution.
 8. Persist vacancies to the vacancies table and mark posts as analyzed.
 9. Update last_message_id per channel (only when new Telegram posts were fetched).
 10. Query new relevant vacancies and build the digest.
-11. Write digest to digest_last.md and send it to the user via the control bot.
+11. Send the digest to the user via the control bot.
 
 ## Control Bot Responses
 - If an analysis run returns an empty message (for example via /retry_failed), the control bot sends a fallback message instead of failing.
