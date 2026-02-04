@@ -19,4 +19,4 @@ repos:
     rev: v2.7.3
     hooks:
       - id: pip-audit
-        # Scans installed packages in the environment
+        args: ["--path", "."]

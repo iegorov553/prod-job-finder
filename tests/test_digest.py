@@ -1,4 +1,5 @@
 from job_finder import digest
+from job_finder import telegram_markdown as mdv2
 from job_finder.models import VacancyNormalized
 from job_finder.resources import messages
 
@@ -31,7 +32,7 @@ def _sample_vacancy(**kwargs):
 
 
 def test_empty_digest() -> None:
-    assert digest.build_digest([]) == messages.EMPTY_DIGEST
+    assert digest.build_digest([]) == mdv2.escape(messages.EMPTY_DIGEST)
 
 
 def test_digest_sorts_remote_first() -> None:
@@ -46,7 +47,7 @@ def test_digest_sorts_remote_first() -> None:
     result = digest.build_digest([onsite, barcelona, remote])
     lines = result.splitlines()
     # First vacancy should be remote (line 4 contains "1)")
-    assert "1)" in lines[4]
+    assert mdv2.escape("1)") in lines[4]
     # Check that Remote appears in the first vacancy block
     first_block = "\n".join(lines[4:8])
     assert "Remote" in first_block
@@ -74,13 +75,13 @@ def test_format_vacancy_compact_format() -> None:
     # Emoji metadata (split into multiple lines)
     assert "🏢 TechCorp" in result
     assert "🏭 EdTech" in result
-    assert "📍 Berlin (hybrid)" in result
+    assert f"📍 {mdv2.escape('Berlin (hybrid)')}" in result
     assert "💼 Senior" in result
     assert "🌐 EN" in result
     # Company and Industry should be on same line
     assert "🏢 TechCorp · 🏭 EdTech" in result
     # Location and Level should be on same line
-    assert "📍 Berlin (hybrid) · 💼 Senior" in result
+    assert f"📍 {mdv2.escape('Berlin (hybrid)')} · 💼 Senior" in result
     # Salary on separate line
     assert "💰 $80k–$120k" in result
     # Language should be on same line (no date in this test)
@@ -170,9 +171,9 @@ def test_format_vacancy_shows_post_date() -> None:
 
     vacancy = _sample_vacancy(post_date=datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc))
     result = digest._format_vacancy(1, vacancy)
-    assert "📅 15.01.2025" in result
+    assert "📅 15\\.01\\.2025" in result
     # Date and language should be on same line
-    assert "📅 15.01.2025 · 🌐 EN" in result
+    assert "📅 15\\.01\\.2025 · 🌐 EN" in result
 
 
 def test_format_vacancy_hides_missing_post_date() -> None:

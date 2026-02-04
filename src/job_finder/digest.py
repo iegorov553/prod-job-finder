@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import List
 
+from job_finder import telegram_markdown as mdv2
 from job_finder.models import VacancyNormalized
 from job_finder.resources import messages
-from job_finder import telegram_markdown as mdv2
 
 # Placeholder values from LLM that should be treated as "no data"
 _PLACEHOLDER_VALUES = frozenset(
@@ -123,9 +123,7 @@ def _format_vacancy(index: int, vacancy: VacancyNormalized) -> str:
 
     # Apply link on separate line (only if present)
     if vacancy.apply_link:
-        lines.append(
-            f"   🔗 {mdv2.link(messages.APPLY_LINK_LABEL, vacancy.apply_link)}"
-        )
+        lines.append(f"   🔗 {mdv2.link(messages.APPLY_LINK_LABEL, vacancy.apply_link)}")
 
     return "\n".join(lines)
 

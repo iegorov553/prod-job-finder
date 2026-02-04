@@ -13,7 +13,7 @@ from job_finder.resources import messages
 
 
 def test_build_digest_from_db_empty_returns_empty_digest() -> None:
-    with patch("job_finder.db.vacancies.get_new_relevant_vacancies", return_value=[]):
+    with patch("job_finder.digest_service.get_new_relevant_vacancies", return_value=[]):
         assert build_digest_from_db() == mdv2.escape(messages.EMPTY_DIGEST)
 
 
@@ -45,8 +45,8 @@ def test_build_digest_from_db_uses_post_data() -> None:
     )
 
     with (
-        patch("job_finder.db.vacancies.get_new_relevant_vacancies", return_value=[vacancy]),
-        patch("job_finder.db.posts.get_post_by_id", return_value=post),
+        patch("job_finder.digest_service.get_new_relevant_vacancies", return_value=[vacancy]),
+        patch("job_finder.digest_service.get_post_by_id", return_value=post),
     ):
         digest_text = build_digest_from_db()
 

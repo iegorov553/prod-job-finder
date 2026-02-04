@@ -268,7 +268,10 @@ def analyze_posts_db(  # noqa: C901
             # Mark posts in failed batch as 'failed'
             failed_post_ids = [post.id for post in batch]
             if failed_post_ids:
-                logger.warning("Marking %s posts as failed due to LLM error", len(failed_post_ids))
+                logger.warning(
+                    "Marking %s posts as failed due to LLM error",
+                    len(failed_post_ids),
+                )
                 mark_posts_analyzed(failed_post_ids, status="failed", vacancies_counts=None)
             processed += len(batch)
             if progress_cb is not None:
@@ -287,7 +290,8 @@ def analyze_posts_db(  # noqa: C901
             failed_post_ids = [post.id for post in batch]
             if failed_post_ids:
                 logger.warning(
-                    "Marking %s posts as failed due to empty LLM response", len(failed_post_ids)
+                    "Marking %s posts as failed due to empty LLM response",
+                    len(failed_post_ids),
                 )
                 mark_posts_analyzed(failed_post_ids, status="failed", vacancies_counts=None)
             if logs is not None:
@@ -320,7 +324,8 @@ def analyze_posts_db(  # noqa: C901
             failed_post_ids = [post.id for post in batch]
             if failed_post_ids:
                 logger.warning(
-                    "Marking %s posts as failed due to parsing error", len(failed_post_ids)
+                    "Marking %s posts as failed due to parsing error",
+                    len(failed_post_ids),
                 )
                 mark_posts_analyzed(failed_post_ids, status="failed", vacancies_counts=None)
             processed += len(batch)

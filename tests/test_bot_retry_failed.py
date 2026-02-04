@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from job_finder import telegram_markdown as mdv2
-from job_finder.bot_control import BotController, RunResult, MARKDOWN_MODE
+from job_finder.bot_control import MARKDOWN_MODE, BotController, RunResult
 from job_finder.resources import messages as msg
 
 
