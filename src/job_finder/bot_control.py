@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Awaitable, Callable, List, Optional
 
 from telegram import Chat, LinkPreviewOptions, Update
+from telegram.error import BadRequest
 from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes
 
 from job_finder.resources import messages as msg
@@ -108,7 +109,24 @@ class BotController:
             text = msg.EMPTY_RESULT
         if len(text) <= 3500:
             link_preview = LinkPreviewOptions(is_disabled=True) if disable_link_preview else None
-            await chat.send_message(text, parse_mode=parse_mode, link_preview_options=link_preview)
+            try:
+                await chat.send_message(
+                    text,
+                    parse_mode=parse_mode,
+                    link_preview_options=link_preview,
+                )
+            except BadRequest as exc:
+                if parse_mode and "Can't parse entities" in str(exc):
+                    logger.warning(
+                        "Telegram rejected Markdown message, retrying as plain text."
+                    )
+                    await chat.send_message(
+                        text,
+                        parse_mode=None,
+                        link_preview_options=link_preview,
+                    )
+                else:
+                    raise
             return
         # File is sent without parse_mode (markdown inside file)
         with io.BytesIO(text.encode("utf-8")) as fh:
