@@ -199,10 +199,12 @@ def mark_posts_analyzed(
     updated = 0
 
     for post_id in post_ids:
-        payload = {
-            "analysis_status": status,
-            "analyzed_at": datetime.now(timezone.utc).isoformat(),
-        }
+        payload = {"analysis_status": status}
+
+        # Only set analyzed_at for completed/failed status, not for pending
+        if status != "pending":
+            payload["analyzed_at"] = datetime.now(timezone.utc).isoformat()
+
         if vacancies_counts and post_id in vacancies_counts:
             payload["vacancies_count"] = vacancies_counts[post_id]
 

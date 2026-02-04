@@ -86,72 +86,84 @@ async def _run_once(
     """Run the main pipeline.
 
     Pipeline steps:
-    1. Ensure channel states exist in DB
-    2. Fetch posts from Telegram
-    3. Save posts to DB
-    4. Analyze posts with LLM (multi-vacancy)
-    5. Save vacancies to DB
-    6. Update channel states in DB
-    7. Build digest from relevant vacancies
+    1. Check for pending posts in DB (for retry_failed)
+    2. If no pending posts: Fetch new posts from Telegram
+    3. Analyze posts with LLM (multi-vacancy)
+    4. Save vacancies to DB
+    5. Update channel states in DB (only for new posts)
+    6. Build digest from relevant vacancies
     """
     from decimal import Decimal
 
-    _ensure_session_file(
-        config.telegram_session,
-        config.telegram_session_base64,
-        config.telegram_string_session,
-        Path("."),
-    )
+    from job_finder.db.posts import get_pending_posts
 
     # Get settings from database
     limits = settings_manager.get_processing_limits()
     hours_lookback = limits["hours_lookback"]
     max_posts_per_run = limits["max_posts_per_run"]
+    effective_limit = limit_posts if limit_posts is not None else max_posts_per_run
 
-    # Ensure channel states exist in DB
-    channel_states = ensure_channels_exist(channels)
-    channel_state_map = {cs.channel: cs.last_message_id for cs in channel_states}
+    # Check for pending posts in DB first (for retry_failed functionality)
+    db_posts = get_pending_posts(limit=effective_limit)
+    fetched_new = False
+    telegram_posts = []  # Store Telegram posts for channel state update
 
-    client = scraper.create_client(
-        config.telegram_api_id,
-        config.telegram_api_hash,
-        config.telegram_session,
-        string_session=config.telegram_string_session,
-    )
-
-    async with client:
-        await client.start()
-        posts = await scraper.fetch_new_posts(
-            client,
-            channels,
-            channel_state_map,
-            hours_lookback=hours_lookback,
+    if db_posts:
+        logger.info("Found %s pending posts in DB for analysis", len(db_posts))
+    else:
+        # No pending posts, fetch new from Telegram
+        _ensure_session_file(
+            config.telegram_session,
+            config.telegram_session_base64,
+            config.telegram_string_session,
+            Path("."),
         )
-        effective_limit = limit_posts if limit_posts is not None else max_posts_per_run
-        posts = posts[:effective_limit]
 
-        if not posts:
-            logger.info(messages.NO_NEW_MESSAGES)
-            return messages.NO_NEW_MESSAGES
+        # Ensure channel states exist in DB
+        channel_states = ensure_channels_exist(channels)
+        channel_state_map = {cs.channel: cs.last_message_id for cs in channel_states}
 
-        logger.info("Fetched %s new messages", len(posts))
+        client = scraper.create_client(
+            config.telegram_api_id,
+            config.telegram_api_hash,
+            config.telegram_session,
+            string_session=config.telegram_string_session,
+        )
 
-        # Save posts to DB
-        posts_to_create = [
-            PostCreate(
-                telegram_id=post.id,
-                channel=post.channel,
-                telegram_date=datetime.fromisoformat(post.date.replace("Z", "+00:00"))
-                if post.date
-                else datetime.now(timezone.utc),
-                text_full=post.text,
-                source_link=post.source_link,
-                links=post.links,
+        async with client:
+            await client.start()
+            posts = await scraper.fetch_new_posts(
+                client,
+                channels,
+                channel_state_map,
+                hours_lookback=hours_lookback,
             )
-            for post in posts
-        ]
-        db_posts = create_posts_batch(posts_to_create)
-        logger.info("Saved %s posts to DB", len(db_posts))
+            posts = posts[:effective_limit]
+
+            if not posts:
+                logger.info(messages.NO_NEW_MESSAGES)
+                return messages.NO_NEW_MESSAGES
+
+            logger.info("Fetched %s new messages", len(posts))
+            telegram_posts = posts  # Save for channel state update
+
+            # Save posts to DB
+            posts_to_create = [
+                PostCreate(
+                    telegram_id=post.id,
+                    channel=post.channel,
+                    telegram_date=datetime.fromisoformat(post.date.replace("Z", "+00:00"))
+                    if post.date
+                    else datetime.now(timezone.utc),
+                    text_full=post.text,
+                    source_link=post.source_link,
+                    links=post.links,
+                )
+                for post in posts
+            ]
+            db_posts = create_posts_batch(posts_to_create)
+            logger.info("Saved %s posts to DB", len(db_posts))
+            fetched_new = True
 
         # Analyze posts with LLM (multi-vacancy)
         llm_logs: list[dict] = []
@@ -226,10 +238,10 @@ async def _run_once(
             )
             log_path.write_text(json.dumps(llm_logs, ensure_ascii=False, indent=2))
 
-        # Update channel states in DB
-        if update_state:
+        # Update channel states in DB (only for new posts from Telegram)
+        if update_state and fetched_new:
             for channel in channels:
-                last_id = scraper.get_max_message_id(posts, channel)
+                last_id = scraper.get_max_message_id(telegram_posts, channel)
                 if last_id is not None:
                     update_last_message_id(channel, last_id)
                     logger.info("Updated last_message_id for %s: %s", channel, last_id)
