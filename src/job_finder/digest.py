@@ -80,10 +80,6 @@ def _build_metadata_lines(vacancy: VacancyNormalized) -> list[str]:
     if row2:
         lines.append(" · ".join(row2))
 
-    # Line 3: Language (always shown)
-    lang_label = vacancy.language.upper() if vacancy.language != "other" else "Other"
-    lines.append(f"🌐 {lang_label}")
-
     return lines
 
 
@@ -92,9 +88,9 @@ def _format_vacancy(index: int, vacancy: VacancyNormalized) -> str:
     # Header with clickable link
     title = vacancy.title or "Product Manager"
     if vacancy.source_link:
-        header = f"{index}) [**{title}**]({vacancy.source_link})"
+        header = f"{index}) [*{title}*]({vacancy.source_link})"
     else:
-        header = f"{index}) **{title}**"
+        header = f"{index}) *{title}*"
 
     lines = [header]
 
@@ -109,13 +105,18 @@ def _format_vacancy(index: int, vacancy: VacancyNormalized) -> str:
     elif vacancy.salary_raw and not _is_placeholder(vacancy.salary_raw):
         lines.append(f"   💰 {vacancy.salary_raw}")
 
-    # Post date on separate line (only if present)
+    # Date and Language on same line (date first, then language)
+    date_lang_parts: list[str] = []
     if vacancy.post_date:
         date_str = vacancy.post_date.strftime("%d.%m.%Y")
-        lines.append(f"   📅 {date_str}")
+        date_lang_parts.append(f"📅 {date_str}")
+    lang_label = vacancy.language.upper() if vacancy.language != "other" else "Other"
+    date_lang_parts.append(f"🌐 {lang_label}")
+    lines.append("   " + " · ".join(date_lang_parts))
 
-    # Description on separate line (only if present and not placeholder)
+    # Description on separate line with empty line before (only if present and not placeholder)
     if vacancy.raw_snippet and not _is_placeholder(vacancy.raw_snippet):
+        lines.append("")  # Empty line before description
         lines.append(f"   📝 {vacancy.raw_snippet}")
 
     # Apply link on separate line (only if present)

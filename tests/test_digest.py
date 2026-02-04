@@ -69,8 +69,8 @@ def test_format_vacancy_compact_format() -> None:
     )
     result = digest._format_vacancy(1, vacancy)
 
-    # Header should be clickable link
-    assert "[**Product Manager**](https://t.me/jobs/123)" in result
+    # Header should be clickable link with bold (single asterisks for Telegram Markdown)
+    assert "[*Product Manager*](https://t.me/jobs/123)" in result
     # Emoji metadata (split into multiple lines)
     assert "🏢 TechCorp" in result
     assert "🏭 EdTech" in result
@@ -83,6 +83,8 @@ def test_format_vacancy_compact_format() -> None:
     assert "📍 Berlin (hybrid) · 💼 Senior" in result
     # Salary on separate line
     assert "💰 $80k–$120k" in result
+    # Language should be on same line (no date in this test)
+    assert "🌐 EN" in result
     # Apply link on separate line
     assert "🔗 [Откликнуться](https://apply.example.com)" in result
 
@@ -163,12 +165,14 @@ def test_format_vacancy_hides_salary_not_specified() -> None:
 
 
 def test_format_vacancy_shows_post_date() -> None:
-    """Test that post_date is shown in DD.MM.YYYY format."""
+    """Test that post_date is shown in DD.MM.YYYY format with language on same line."""
     from datetime import datetime, timezone
 
     vacancy = _sample_vacancy(post_date=datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc))
     result = digest._format_vacancy(1, vacancy)
     assert "📅 15.01.2025" in result
+    # Date and language should be on same line
+    assert "📅 15.01.2025 · 🌐 EN" in result
 
 
 def test_format_vacancy_hides_missing_post_date() -> None:
@@ -201,7 +205,7 @@ def test_format_vacancy_hides_empty_raw_snippet() -> None:
 
 
 def test_format_vacancy_field_order() -> None:
-    """Test that date and description appear in correct order."""
+    """Test that date/language and description appear in correct order with empty line before description."""
     from datetime import datetime, timezone
 
     vacancy = _sample_vacancy(
@@ -221,3 +225,15 @@ def test_format_vacancy_field_order() -> None:
 
     # Verify order: salary < date < snippet < apply_link
     assert salary_pos < date_pos < snippet_pos < apply_pos
+
+    # Verify empty line before description
+    lines = result.split("\n")
+    snippet_line_idx = None
+    for i, line in enumerate(lines):
+        if "📝" in line:
+            snippet_line_idx = i
+            break
+    assert snippet_line_idx is not None
+    assert snippet_line_idx > 0
+    # Line before description should be empty
+    assert lines[snippet_line_idx - 1].strip() == ""
