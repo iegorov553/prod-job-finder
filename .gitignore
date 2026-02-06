@@ -4,5 +4,13 @@ __pycache__/
 .ruff_cache/
 .venv/
 .env
+apps/web/node_modules/
+apps/web/.next/
 state.json
 *.session*
+.mcp.json
+AGENTS.md
+CLAUDE.md
+.claude/
+digest_last.md
+nul

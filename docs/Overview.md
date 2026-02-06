@@ -1,0 +1,19 @@
+# Overview
+
+Product Manager Telegram Job Digester collects posts from selected Telegram channels, analyzes them with an LLM to extract and filter Product Manager vacancies, stores results in Supabase, delivers a Markdown digest via a control bot, and provides a web UI for runs, settings, and vacancy status updates.
+
+## Primary Users
+- The bot owner who configures channels and LLM settings.
+- Operators who trigger runs, inspect status, and review digests.
+
+## Key Capabilities
+- Fetches new Telegram posts per channel with per-channel state tracking.
+- Runs LLM analysis to extract multiple vacancies from one post.
+- Stores posts, vacancies, and runtime settings in Supabase.
+- Produces a daily or on-demand digest in Telegram.
+- Provides a Next.js UI to trigger runs and manage vacancy statuses.
+
+## Boundaries and Non-Goals
+- Not a public-facing job board.
+- Not a full applicant tracking system; it only tracks lightweight vacancy status.
+- Not a general purpose Telegram bot for multiple users.

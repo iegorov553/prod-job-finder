@@ -3,14 +3,16 @@ from __future__ import annotations
 import asyncio
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Mapping, Sequence
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.custom.message import Message
 
 from job_finder.models import RawPost
-from job_finder.state import State
+
+# Type alias for channel state mapping (channel -> last_message_id)
+ChannelStateMap = Mapping[str, int | None]
 
 URL_PATTERN = re.compile(r"https?://\S+")
 
@@ -31,16 +33,42 @@ async def _collect_channel_messages(
     channel: str,
     last_message_id: int | None,
     hours_lookback: int,
+    max_messages: int = 500,
 ) -> List[Message]:
-    offset_date = datetime.now(tz=timezone.utc) - timedelta(hours=hours_lookback)
+    """Collect messages from a channel.
+
+    Two strategies depending on whether we have last_message_id:
+    1. With last_message_id: get messages with ID > last_message_id (new messages)
+    2. Without last_message_id: get recent messages within hours_lookback window
+    """
+    cutoff_date = datetime.now(tz=timezone.utc) - timedelta(hours=hours_lookback)
     messages: List[Message] = []
-    async for message in client.iter_messages(
-        channel,
-        min_id=last_message_id or 0,
-        offset_date=offset_date,
-        reverse=True,
-    ):
-        messages.append(message)
+
+    if last_message_id:
+        # Channel with known state: get new messages since last_message_id
+        async for message in client.iter_messages(
+            channel,
+            min_id=last_message_id,
+            limit=max_messages,
+            reverse=True,
+        ):
+            msg_date = message.date.replace(tzinfo=timezone.utc)
+            if msg_date >= cutoff_date:
+                messages.append(message)
+    else:
+        # New channel: get recent messages within hours_lookback window
+        # Iterate from newest to oldest, stop when we hit old messages
+        async for message in client.iter_messages(
+            channel,
+            limit=max_messages,
+        ):
+            msg_date = message.date.replace(tzinfo=timezone.utc)
+            if msg_date < cutoff_date:
+                break  # Reached messages older than cutoff, stop
+            messages.append(message)
+        # Reverse to get chronological order (oldest first)
+        messages.reverse()
+
     return messages
 
 
@@ -71,21 +99,32 @@ def _message_to_raw_post(channel: str, message: Message) -> RawPost:
 async def fetch_new_posts(
     client: TelegramClient,
     channels: Sequence[str],
-    state: State,
+    channel_states: ChannelStateMap,
     hours_lookback: int,
 ) -> List[RawPost]:
+    """Fetch new posts from channels since last known message IDs.
+
+    Args:
+        client: Telethon client
+        channels: List of channel usernames
+        channel_states: Mapping of channel -> last_message_id
+        hours_lookback: How far back to look for messages
+
+    Returns:
+        List of RawPost objects
+    """
     tasks = [
         _collect_channel_messages(
             client,
             channel,
-            state.get_last_message_id(channel),
+            channel_states.get(channel),
             hours_lookback=hours_lookback,
         )
         for channel in channels
     ]
     collected: List[List[Message]] = await asyncio.gather(*tasks)
     posts: List[RawPost] = []
-    for channel, messages in zip(channels, collected):
+    for channel, messages in zip(channels, collected, strict=False):
         for message in messages:
             posts.append(_message_to_raw_post(channel, message))
     return posts

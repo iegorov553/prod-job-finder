@@ -1,15 +1,22 @@
 from __future__ import annotations
 
-import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from job_finder.settings import SchedulerConfig
-
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SchedulerConfig:
+    """Scheduler configuration."""
+
+    enabled: bool = False
+    time_utc: Optional[str] = None
+
 
 JobFunc = Callable[[], Awaitable[None]]
 
