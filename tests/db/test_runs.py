@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from job_finder.db.models import RunUpdate
@@ -168,8 +168,9 @@ class TestMarkRunningFailed:
         update_payload = mock_client.table.return_value.update.call_args[0][0]
         assert update_payload["status"] == "failed"
         assert update_payload["error"] == "aborted"
-        assert isinstance(update_payload["finished_at"], datetime)
-        assert update_payload["finished_at"].tzinfo == timezone.utc
+        assert isinstance(update_payload["finished_at"], str)
+        parsed_finished_at = datetime.fromisoformat(update_payload["finished_at"])
+        assert parsed_finished_at.tzinfo is not None
         mock_client.table.return_value.update.assert_called_once()
         mock_client.table.return_value.update.return_value.eq.assert_called_once_with(
             "status", "running"

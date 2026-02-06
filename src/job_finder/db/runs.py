@@ -75,7 +75,7 @@ def mark_running_failed(reason: str) -> int:
     payload: dict[str, Any] = {
         "status": "failed",
         "error": reason,
-        "finished_at": datetime.now(timezone.utc),
+        "finished_at": datetime.now(timezone.utc).isoformat(),
     }
     response = client.table(TABLE_NAME).update(cast(Any, payload)).eq("status", "running").execute()
     return len(response.data)
