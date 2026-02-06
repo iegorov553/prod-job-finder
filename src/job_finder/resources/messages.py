@@ -56,6 +56,7 @@ PROMPT_RESET_SUCCESS = "✅ Промпт сброшен на значение п
 SETTINGS_DB_UNAVAILABLE = "❌ База данных настроек недоступна"
 SETTINGS_UPDATE_ERROR = "❌ Ошибка обновления настроек: {error}"
 HISTORY_EMPTY = "История пуста."
+RUN_ALREADY_RUNNING = "Запуск уже выполняется."
 
 # Retry Failed Commands
 RETRY_FAILED_START = "Повторный анализ {count} failed постов..."
@@ -64,6 +65,9 @@ RETRY_FAILED_NO_POSTS = "Нет failed постов для повторного 
 RETRY_FAILED_RESULT = "Результаты повторного анализа"
 RETRY_FAILED_ERROR = "❌ Ошибка повторного анализа: {error}"
 RETRY_FAILED_INVALID_LIMIT = "❌ Limit должен быть от 1 до 500"
+PROMPT_NOT_CONFIGURED = "Error: custom_prompt not configured. Use /prompt_set to configure."
+LLM_PARSE_ERROR = "LLM rate limit or parse error. Please try again later."
+PIPELINE_ERROR = "Pipeline error: {error}"
 
 HELP_GENERAL = [
     "/help - эта справка",

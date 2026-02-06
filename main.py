@@ -4,11 +4,14 @@ import asyncio
 import base64
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, cast
 
 from job_finder import digest_service, llm_client, scraper
+from job_finder.api.app import create_app
+from job_finder.api.server import start_server
 from job_finder.bot_control import BotController, RunResult
 from job_finder.config import Config, load_config
 from job_finder.db import init_supabase
@@ -19,10 +22,12 @@ from job_finder.db.channel_states import (
 )
 from job_finder.db.models import PostCreate, VacancyCreate
 from job_finder.db.posts import create_posts_batch, mark_posts_analyzed
+from job_finder.db.runs import mark_running_failed
 from job_finder.db.settings import ensure_settings_exist
 from job_finder.db.vacancies import create_vacancies_batch
 from job_finder.llm_client import LLMConfig
-from job_finder.resources import messages
+from job_finder.resources import api_messages, messages
+from job_finder.run_service import RunInProgressError, RunService
 from job_finder.scheduler import PipelineScheduler, SchedulerConfig
 from job_finder.settings_manager import SettingsManager, init_settings_manager
 from job_finder.utils.locks import PipelineLock
@@ -37,6 +42,13 @@ scheduler = PipelineScheduler()
 
 # Global settings manager
 _settings_manager: SettingsManager | None = None
+
+
+@dataclass
+class PipelineResult:
+    message: str
+    is_markdown: bool
+    success: bool
 
 
 def _ensure_session_file(
@@ -88,7 +100,7 @@ async def _run_once(  # noqa: C901
     limit_posts: int | None = None,
     update_state: bool = True,
     progress_cb: Callable[[int, int], None] | None = None,
-) -> tuple[str, bool]:
+) -> PipelineResult:
     """Run the main pipeline.
 
     Pipeline steps:
@@ -148,7 +160,11 @@ async def _run_once(  # noqa: C901
 
             if not posts:
                 logger.info(messages.NO_NEW_MESSAGES)
-                return messages.NO_NEW_MESSAGES, False
+                return PipelineResult(
+                    message=messages.NO_NEW_MESSAGES,
+                    is_markdown=False,
+                    success=True,
+                )
 
             logger.info("Fetched %s new messages", len(posts))
             telegram_posts = posts  # Save for channel state update
@@ -178,7 +194,11 @@ async def _run_once(  # noqa: C901
     custom_prompt = settings_manager.get_custom_prompt()
     if not custom_prompt:
         logger.error("custom_prompt not set in database settings")
-        return "Error: custom_prompt not configured. Use /prompt_set to configure.", False
+        return PipelineResult(
+            message=messages.PROMPT_NOT_CONFIGURED,
+            is_markdown=False,
+            success=False,
+        )
 
     # Build LLM config from credentials + settings
     llm_config = _build_llm_config(config, settings_manager)
@@ -193,7 +213,11 @@ async def _run_once(  # noqa: C901
 
     if llm_logs and not any(item.get("parsed_ok") for item in llm_logs if isinstance(item, dict)):
         logger.warning("LLM returned no valid results; state not updated.")
-        return "LLM rate limit or parse error. Please try again later.", False
+        return PipelineResult(
+            message=messages.LLM_PARSE_ERROR,
+            is_markdown=False,
+            success=False,
+        )
 
     # Save vacancies to DB and update post analysis status
     total_vacancies = 0
@@ -251,7 +275,7 @@ async def _run_once(  # noqa: C901
 
     digest_text = digest_service.build_digest_from_db(limit=100)
 
-    return digest_text, True
+    return PipelineResult(message=digest_text, is_markdown=True, success=True)
 
 
 def main() -> None:  # noqa: C901
@@ -267,6 +291,7 @@ def main() -> None:  # noqa: C901
     _settings_manager = init_settings_manager()
     ensure_settings_exist()
     logger.info("Settings manager initialized")
+    mark_running_failed(api_messages.RUN_ABORTED)
 
     def append_relevant(relevant_text: str, relevant_items: list[dict]) -> None:
         RELEVANT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -288,7 +313,7 @@ def main() -> None:  # noqa: C901
         log_file: Path | None = None
         async with pipeline_lock.acquire():
             try:
-                result_text, is_markdown = await _run_once(
+                pipeline_result = await _run_once(
                     config,
                     _settings_manager,
                     channels,
@@ -296,6 +321,7 @@ def main() -> None:  # noqa: C901
                     update_state=update_state,
                     progress_cb=progress_cb,
                 )
+                result_text = pipeline_result.message
                 if result_text and result_text != messages.NO_NEW_MESSAGES:
                     # Try to append relevant items parsed from last log (if any)
                     parsed_relevant: list[dict] = []
@@ -327,15 +353,26 @@ def main() -> None:  # noqa: C901
                 return RunResult(
                     message=result_text,
                     log_path=str(log_file) if log_file else None,
-                    is_markdown=is_markdown,
+                    is_markdown=pipeline_result.is_markdown,
+                    success=pipeline_result.success,
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Pipeline error: %s", exc)
                 return RunResult(
-                    message=f"Pipeline error: {exc}",
+                    message=messages.PIPELINE_ERROR.format(error=exc),
                     log_path=None,
                     is_markdown=False,
+                    success=False,
                 )
+
+    async def run_pipeline(progress_cb: Callable[[int, int], None] | None = None) -> RunResult:
+        return await run_pipeline_and_return(
+            update_state=True,
+            limit_posts=None,
+            progress_cb=progress_cb,
+        )
+
+    run_service = RunService(run_pipeline, pipeline_lock)
 
     def status_text() -> str:
         channels = _settings_manager.get_channels() if _settings_manager else []
@@ -380,7 +417,10 @@ def main() -> None:  # noqa: C901
         return "\n".join(parts)
 
     async def run_pipeline_job() -> None:
-        asyncio.create_task(run_pipeline_and_return())
+        try:
+            await run_service.start_background_run()
+        except RunInProgressError:
+            logger.info("Scheduled run skipped: already running")
 
     async def update_schedule(cfg: SchedulerConfig) -> str:
         scheduler.update(cfg, run_pipeline_job)
@@ -390,15 +430,26 @@ def main() -> None:  # noqa: C901
             else "Auto-run disabled."
         )
 
+    async def run_preview(progress_cb: Callable[[int, int], None] | None = None) -> RunResult:
+        if run_service.has_active_run():
+            return RunResult(message=messages.RUN_ALREADY_RUNNING, success=False)
+        return await run_pipeline_and_return(
+            update_state=False,
+            limit_posts=5,
+            progress_cb=progress_cb,
+        )
+
+    async def run_now(progress_cb: Callable[[int, int], None] | None = None) -> RunResult:
+        try:
+            return await run_service.run_and_wait(progress_cb=progress_cb)
+        except RunInProgressError:
+            return RunResult(message=messages.RUN_ALREADY_RUNNING, success=False)
+
     bot = BotController(
         token=config.bot_token,
         allowed_users=config.allowed_user_ids,
-        on_run=lambda progress_cb: run_pipeline_and_return(
-            update_state=True, limit_posts=None, progress_cb=progress_cb
-        ),
-        on_run_preview=lambda progress_cb: run_pipeline_and_return(
-            update_state=False, limit_posts=5, progress_cb=progress_cb
-        ),
+        on_run=run_now,
+        on_run_preview=run_preview,
         on_schedule_update=update_schedule,
         get_status=status_text,
         get_digest=build_digest_text,
@@ -420,11 +471,25 @@ def main() -> None:  # noqa: C901
             time_utc=scheduler_cfg.get("time_utc"),
         )
         scheduler.update(initial_scheduler, run_pipeline_job)
+        api_server = None
+        api_task = None
+        if config.api_enabled:
+            if not config.run_api_token:
+                raise ValueError("RUN_API_TOKEN is required when API is enabled")
+            app = create_app(run_service, config.run_api_token)
+            api_server, api_task = start_server(
+                app,
+                host=config.api_host,
+                port=config.api_port,
+            )
         try:
             await bot.run_polling()
         finally:
             await bot.shutdown()
             scheduler.stop()
+            if api_server and api_task:
+                api_server.should_exit = True
+                await api_task
 
     asyncio.run(serve())
 

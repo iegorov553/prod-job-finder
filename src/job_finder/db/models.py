@@ -18,6 +18,7 @@ VacancyStatus = Literal["new", "saved", "applied", "interview", "rejected", "off
 Seniority = Literal["junior", "middle", "senior", "lead", "head", "other"]
 RemoteType = Literal["remote", "hybrid", "onsite", "unknown"]
 Language = Literal["en", "ru", "other"]
+RunStatus = Literal["running", "success", "failed"]
 
 
 class ChannelStateDB(BaseModel):
@@ -317,6 +318,35 @@ class SettingsUpdate(BaseModel):
         return data
 
 
+class RunDB(BaseModel):
+    """Model for runs table (full record from DB)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    status: RunStatus
+    digest_md: Optional[str] = None
+    error: Optional[str] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+
+class RunCreate(BaseModel):
+    """Model for creating a run entry."""
+
+    status: RunStatus = "running"
+
+
+class RunUpdate(BaseModel):
+    """Model for updating a run entry."""
+
+    status: Optional[RunStatus] = None
+    digest_md: Optional[str] = None
+    error: Optional[str] = None
+    finished_at: Optional[datetime] = None
+
+
 # Re-export for easier imports
 __all__ = [
     "AnalysisStatus",
@@ -324,6 +354,7 @@ __all__ = [
     "Seniority",
     "RemoteType",
     "Language",
+    "RunStatus",
     "ChannelStateDB",
     "ChannelStateCreate",
     "PostDB",
@@ -336,4 +367,7 @@ __all__ = [
     "VacancyFromLLM",
     "SettingsDB",
     "SettingsUpdate",
+    "RunDB",
+    "RunCreate",
+    "RunUpdate",
 ]

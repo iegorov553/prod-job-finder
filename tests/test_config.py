@@ -16,6 +16,10 @@ def test_load_config_parses_env(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("ALLOW_USER_IDS", "1,2")
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
     monkeypatch.setenv("SUPABASE_KEY", "test-key")
+    monkeypatch.setenv("API_ENABLED", "true")
+    monkeypatch.setenv("API_HOST", "127.0.0.1")
+    monkeypatch.setenv("API_PORT", "9000")
+    monkeypatch.setenv("RUN_API_TOKEN", "secret")
 
     config = load_config(env_path=None)
 
@@ -29,6 +33,10 @@ def test_load_config_parses_env(monkeypatch, tmp_path: Path) -> None:
     assert config.allowed_user_ids == [1, 2]
     assert config.supabase_url == "https://test.supabase.co"
     assert config.supabase_key == "test-key"
+    assert config.api_enabled is True
+    assert config.api_host == "127.0.0.1"
+    assert config.api_port == 9000
+    assert config.run_api_token == "secret"
 
 
 def test_load_config_defaults(monkeypatch) -> None:
@@ -45,6 +53,10 @@ def test_load_config_defaults(monkeypatch) -> None:
 
     assert config.telegram_session == "telegram_session"
     assert config.llm_base_url == "https://api.openai.com/v1"
+    assert config.api_enabled is False
+    assert config.api_host == "0.0.0.0"
+    assert config.api_port == 8000
+    assert config.run_api_token is None
 
 
 def test_load_config_missing_vars(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -89,4 +101,19 @@ def test_load_config_missing_supabase_key(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.delenv("SUPABASE_KEY", raising=False)
 
     with pytest.raises(ValueError, match="SUPABASE_KEY is required"):
+        load_config(env_path=None)
+
+
+def test_load_config_requires_run_token_when_api_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TELEGRAM_API_ID", "123")
+    monkeypatch.setenv("TELEGRAM_API_HASH", "hash")
+    monkeypatch.setenv("LLM_API_KEY", "key")
+    monkeypatch.setenv("BOT_TOKEN", "token")
+    monkeypatch.setenv("ALLOW_USER_IDS", "1")
+    monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "test-key")
+    monkeypatch.setenv("API_ENABLED", "true")
+    monkeypatch.delenv("RUN_API_TOKEN", raising=False)
+
+    with pytest.raises(ValueError, match="RUN_API_TOKEN is required"):
         load_config(env_path=None)

@@ -35,6 +35,7 @@ class RunResult:
     message: Optional[str]
     log_path: Optional[str] = None
     is_markdown: bool = False
+    success: bool = True
 
 
 class BotController:

@@ -34,6 +34,12 @@ class Config:
     supabase_url: str
     supabase_key: str
 
+    # API settings
+    api_enabled: bool
+    api_host: str
+    api_port: int
+    run_api_token: str | None
+
 
 def _parse_int_list(raw: str | None) -> List[int]:
     if not raw:
@@ -94,6 +100,18 @@ def load_config(env_path: str | None = ".env") -> Config:
     if not supabase_key:
         raise ValueError("SUPABASE_KEY is required")
 
+    api_enabled_raw = os.environ.get("API_ENABLED", "false").strip().lower()
+    api_enabled = api_enabled_raw in {"1", "true", "yes", "on"}
+    api_host = os.environ.get("API_HOST", "0.0.0.0")  # nosec B104
+    api_port_raw = os.environ.get("API_PORT") or os.environ.get("PORT") or "8000"
+    try:
+        api_port = int(api_port_raw)
+    except ValueError as exc:
+        raise ValueError("API_PORT must be an integer") from exc
+    run_api_token = os.environ.get("RUN_API_TOKEN")
+    if api_enabled and not run_api_token:
+        raise ValueError("RUN_API_TOKEN is required when API_ENABLED is true")
+
     return Config(
         telegram_api_id=telegram_api_id,
         telegram_api_hash=telegram_api_hash,
@@ -106,4 +124,8 @@ def load_config(env_path: str | None = ".env") -> Config:
         allowed_user_ids=allowed_user_ids,
         supabase_url=supabase_url,
         supabase_key=supabase_key,
+        api_enabled=api_enabled,
+        api_host=api_host,
+        api_port=api_port,
+        run_api_token=run_api_token,
     )

@@ -12,6 +12,10 @@
 - ALLOW_USER_IDS: comma-separated list of allowed Telegram user ids.
 - SUPABASE_URL: Supabase project URL.
 - SUPABASE_KEY: Supabase service role key.
+- API_ENABLED: enable HTTP API server for /api/run.
+- API_HOST: HTTP server bind address (default 0.0.0.0).
+- API_PORT: HTTP server port (default 8000 or PORT).
+- RUN_API_TOKEN: bearer token for /api/run authentication.
 
 ## Dynamic Settings (Supabase)
 - Stored in the settings table and managed via Telegram commands.
@@ -19,3 +23,4 @@
 
 ## Related Files
 - .env.example: template for environment variables.
+- apps/web/.env.example: frontend env template for Vercel.
