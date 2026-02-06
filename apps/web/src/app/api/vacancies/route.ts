@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { copy } from "@/resources/en";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseServer } from "@/lib/supabaseServer";
+
+export const dynamic = "force-dynamic";
 
 const parseBoolean = (value: string | null): boolean | null => {
   if (value === null) {
@@ -17,6 +19,7 @@ const parseBoolean = (value: string | null): boolean | null => {
 };
 
 export async function GET(request: Request) {
+  const supabaseServer = getSupabaseServer();
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const relevant = parseBoolean(searchParams.get("is_relevant"));

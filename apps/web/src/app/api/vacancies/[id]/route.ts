@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { copy } from "@/resources/en";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 import { VacancyStatus } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
 
 const validStatuses: VacancyStatus[] = [
   "new",
@@ -17,6 +19,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const supabaseServer = getSupabaseServer();
   const vacancyId = Number(params.id);
   if (!Number.isFinite(vacancyId)) {
     return NextResponse.json({ error: copy.errors.invalidPayload }, { status: 400 });

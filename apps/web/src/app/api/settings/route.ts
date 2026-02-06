@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { copy } from "@/resources/en";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 import { parseSettingsUpdate } from "@/lib/validators";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
+  const supabaseServer = getSupabaseServer();
   const { data, error } = await supabaseServer
     .from("settings")
     .select("*")
@@ -18,6 +21,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const supabaseServer = getSupabaseServer();
   let payload: unknown;
   try {
     payload = await request.json();

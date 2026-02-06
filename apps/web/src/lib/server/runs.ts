@@ -1,7 +1,8 @@
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 import { RunRecord } from "@/lib/types";
 
 export const fetchRuns = async (limit = 10): Promise<RunRecord[]> => {
+  const supabaseServer = getSupabaseServer();
   const { data } = await supabaseServer
     .from("runs")
     .select("*")
