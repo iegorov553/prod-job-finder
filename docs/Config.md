@@ -17,6 +17,12 @@
 - API_PORT: HTTP server port (default 8000 or PORT).
 - RUN_API_TOKEN: bearer token for /api/run authentication.
 
+## Frontend Runtime Variables (Vercel)
+- SUPABASE_URL: Supabase project URL for Next.js server routes.
+- SUPABASE_SERVICE_KEY: Supabase `service_role` key (server-only, never public).
+- RUN_API_BASE_URL: public Railway backend URL including protocol (for example `https://<service>.up.railway.app`).
+- RUN_API_TOKEN: must match backend `RUN_API_TOKEN` used by Python `/api/run`.
+
 ## Dynamic Settings (Supabase)
 - Stored in the settings table and managed via Telegram commands.
 - Includes channels, scheduler, LLM model and limits, and custom_prompt.

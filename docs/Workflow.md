@@ -23,6 +23,11 @@ This describes what happens during a single run execution (via /run or the HTTP 
 ## Run API
 - `POST /api/run` creates a new run record with status `running` and triggers the pipeline asynchronously.
 - The UI polls the runs table (via Next.js API) to show status and re-enable the Run button.
+- A second `POST /api/run` while a run is active returns `409 Conflict`.
 
 ## Preview Mode
 - /run_once limits to 5 posts and does not update channel state.
+
+## Concurrency Guard
+- The pipeline uses a shared lock to prevent concurrent executions from bot commands, scheduler, and HTTP API.
+- The lock supports re-entrancy inside the same async task, so background `/api/run` execution does not deadlock when nested pipeline helpers are called.
