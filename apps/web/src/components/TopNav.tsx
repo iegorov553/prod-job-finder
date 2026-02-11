@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { copy } from "@/resources/en";
+import { LogoutButton } from "./LogoutButton";
 
 export const TopNav = () => (
   <nav className="top-nav">
@@ -10,6 +11,7 @@ export const TopNav = () => (
     <div className="nav-links">
       <Link href="/">{copy.nav.dashboard}</Link>
       <Link href="/settings">{copy.nav.settings}</Link>
+      <LogoutButton />
     </div>
   </nav>
 );
