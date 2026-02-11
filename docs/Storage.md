@@ -2,7 +2,10 @@
 
 ## Supabase Tables
 - posts: raw Telegram messages, analysis status, and metadata.
+  - `links` stores raw URLs extracted from text, entities, and inline buttons.
 - vacancies: extracted job vacancies, relevance, status, and salary fields.
+  - `apply_link` is selected by LLM from post URLs.
+  - `links_json` stores vacancy-scoped links as JSON objects: `{ "url": "...", "type": "..." }`.
 - channel_states: per-channel last_message_id tracking.
 - settings: runtime configuration (channels, scheduler, LLM params, limits, custom_prompt).
 - runs: pipeline run history (status, timestamps, digest, error).
@@ -17,3 +20,5 @@
 - migrations/002_settings_table.sql: settings table and defaults.
 - migrations/003_require_custom_prompt.sql: custom_prompt requirement and default.
 - migrations/004_runs_table.sql: runs table for UI and API tracking.
+- migrations/007_add_vacancy_links_json.sql: `vacancies.links_json` JSONB column.
+- migrations/008_update_default_prompt_with_links.sql: updates legacy default prompt with link typing/output rules.

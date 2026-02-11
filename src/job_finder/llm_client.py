@@ -4,16 +4,27 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Callable, Iterable, List
+from typing import Callable, Iterable, List, cast
+from urllib.parse import urlparse
 
 import requests
 
-from job_finder.db.models import PostAnalysisResult, PostDB, VacancyFromLLM
+from job_finder.db.models import LinkType, PostAnalysisResult, PostDB, VacancyFromLLM, VacancyLink
 from job_finder.db.posts import mark_posts_analyzed
 from job_finder.models import Language, RemoteType
 from job_finder.resources.messages import ERROR_PARSING_BATCH
 
 logger = logging.getLogger(__name__)
+ALLOWED_LINK_TYPES = {
+    "apply_direct",
+    "job_board_post",
+    "social_post",
+    "company_careers",
+    "job_description",
+    "recruiter_contact",
+    "company_website",
+    "other",
+}
 
 
 @dataclass
@@ -47,6 +58,41 @@ def _map_remote_type(value: str | None) -> RemoteType:
     if normalized in {"remote", "hybrid", "onsite"}:
         return normalized  # type: ignore[return-value]
     return "unknown"
+
+
+def _is_valid_http_url(value: object) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _normalize_link_type(value: object) -> LinkType:
+    if not isinstance(value, str):
+        return "other"
+    candidate = value.strip().lower()
+    if candidate in ALLOWED_LINK_TYPES:
+        return cast(LinkType, candidate)
+    return cast(LinkType, "other")
+
+
+def _parse_vacancy_links(raw_links: object) -> list[VacancyLink]:
+    if not isinstance(raw_links, list):
+        return []
+    parsed_links: list[VacancyLink] = []
+    for item in raw_links:
+        if not isinstance(item, dict):
+            continue
+        url = item.get("url")
+        if not _is_valid_http_url(url):
+            continue
+        parsed_links.append(
+            VacancyLink(
+                url=cast(str, url),
+                type=_normalize_link_type(item.get("type")),
+            )
+        )
+    return parsed_links
 
 
 def _build_user_payload_db(posts: List[PostDB]) -> str:
@@ -164,7 +210,10 @@ def _parse_multi_vacancy_response(  # noqa: C901
                     salary_raw=v.get("salary_raw"),
                     language=_map_language(v.get("language")),
                     raw_snippet=v.get("raw_snippet"),
-                    apply_link=v.get("apply_link"),
+                    apply_link=(
+                        v.get("apply_link") if _is_valid_http_url(v.get("apply_link")) else None
+                    ),
+                    links_json=_parse_vacancy_links(v.get("links_json")),
                 )
                 vacancies.append(vacancy)
             except Exception as exc:  # noqa: BLE001

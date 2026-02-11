@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, List, Mapping, Sequence
 
@@ -9,12 +8,11 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.custom.message import Message
 
+from job_finder.link_extraction import extract_links_from_message
 from job_finder.models import RawPost
 
 # Type alias for channel state mapping (channel -> last_message_id)
 ChannelStateMap = Mapping[str, int | None]
-
-URL_PATTERN = re.compile(r"https?://\S+")
 
 
 def create_client(
@@ -72,8 +70,8 @@ async def _collect_channel_messages(
     return messages
 
 
-def _extract_links(text: str) -> List[str]:
-    return URL_PATTERN.findall(text)
+def _extract_links(message: Message) -> List[str]:
+    return extract_links_from_message(message)
 
 
 def _build_source_link(channel: str, message_id: int) -> str:
@@ -83,7 +81,7 @@ def _build_source_link(channel: str, message_id: int) -> str:
 
 def _message_to_raw_post(channel: str, message: Message) -> RawPost:
     text = message.message or ""
-    links = _extract_links(text)
+    links = _extract_links(message)
     source_link = _build_source_link(channel, message.id)
     date_iso = message.date.astimezone(timezone.utc).isoformat()
     return RawPost(

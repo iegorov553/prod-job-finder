@@ -8,13 +8,14 @@ This describes what happens during a single run execution (via /run or the HTTP 
 3. Ensure channel state records exist for all configured channels.
 4. If pending posts exist (from /retry_failed), analyze them first and skip Telegram fetch.
 5. Otherwise, fetch new Telegram posts since last_message_id or within the lookback window.
-6. Persist posts to the posts table (upsert by channel and telegram_id).
-7. Send posts to the LLM in batches and parse multi-vacancy results.
-8. Persist vacancies to the vacancies table and mark posts as analyzed.
-9. Update last_message_id per channel (only when new Telegram posts were fetched).
-10. Query new relevant vacancies and build the digest.
-11. Persist run status and digest to the runs table.
-12. Send the digest to the user via the control bot.
+6. Extract raw links per post from text, Telegram entities, and inline buttons; persist into `posts.links`.
+7. Persist posts to the posts table (upsert by channel and telegram_id).
+8. Send posts to the LLM in batches and parse multi-vacancy results.
+9. Persist vacancies (including `apply_link` and `links_json`) and mark posts as analyzed.
+10. Update last_message_id per channel (only when new Telegram posts were fetched).
+11. Query new relevant vacancies and build the digest.
+12. Persist run status and digest to the runs table.
+13. Send the digest to the user via the control bot.
 
 ## Control Bot Responses
 - If an analysis run returns an empty message (for example via /retry_failed), the control bot sends a fallback message instead of failing.

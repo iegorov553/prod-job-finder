@@ -242,6 +242,7 @@ async def _run_once(  # noqa: C901
                 relevance_reason=v.relevance_reason,
                 raw_snippet=v.raw_snippet,
                 apply_link=v.apply_link,
+                links_json=v.links_json,
             )
             for v in result.vacancies
         ]

@@ -19,6 +19,23 @@ Seniority = Literal["junior", "middle", "senior", "lead", "head", "other"]
 RemoteType = Literal["remote", "hybrid", "onsite", "unknown"]
 Language = Literal["en", "ru", "other"]
 RunStatus = Literal["running", "success", "failed"]
+LinkType = Literal[
+    "apply_direct",
+    "job_board_post",
+    "social_post",
+    "company_careers",
+    "job_description",
+    "recruiter_contact",
+    "company_website",
+    "other",
+]
+
+
+class VacancyLink(BaseModel):
+    """Structured link metadata for vacancy-related URLs."""
+
+    url: str
+    type: LinkType = "other"
 
 
 class ChannelStateDB(BaseModel):
@@ -96,6 +113,7 @@ class VacancyDB(BaseModel):
     relevance_reason: Optional[str] = None
     status: VacancyStatus = "new"
     apply_link: Optional[str] = None
+    links_json: List[VacancyLink] = Field(default_factory=list)
     notes: Optional[str] = None
     cover_letter: Optional[str] = None
     raw_snippet: Optional[str] = None
@@ -121,6 +139,7 @@ class VacancyCreate(BaseModel):
     relevance_reason: Optional[str] = None
     raw_snippet: Optional[str] = None
     apply_link: Optional[str] = None
+    links_json: List[VacancyLink] = Field(default_factory=list)
 
 
 class VacancyUpdate(BaseModel):
@@ -153,6 +172,7 @@ class VacancyFromLLM(BaseModel):
     language: Optional[Language] = None
     raw_snippet: Optional[str] = None
     apply_link: Optional[str] = None
+    links_json: List[VacancyLink] = Field(default_factory=list)
 
 
 class PostAnalysisResult(BaseModel):
@@ -355,6 +375,8 @@ __all__ = [
     "RemoteType",
     "Language",
     "RunStatus",
+    "LinkType",
+    "VacancyLink",
     "ChannelStateDB",
     "ChannelStateCreate",
     "PostDB",

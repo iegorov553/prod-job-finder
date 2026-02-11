@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from job_finder.db.models import VacancyCreate, VacancyUpdate
+from job_finder.db.models import VacancyCreate, VacancyLink, VacancyUpdate
 
 
 class TestCreateVacancy:
@@ -32,6 +32,7 @@ class TestCreateVacancy:
                 "relevance_reason": "Matches criteria",
                 "status": "new",
                 "apply_link": None,
+                "links_json": [{"url": "https://example.com/apply", "type": "apply_direct"}],
                 "notes": None,
                 "cover_letter": None,
                 "raw_snippet": "Job text...",
@@ -52,12 +53,14 @@ class TestCreateVacancy:
                 level="senior",
                 is_relevant=True,
                 relevance_reason="Matches criteria",
+                links_json=[VacancyLink(url="https://example.com/apply", type="apply_direct")],
             )
             result = create_vacancy(data)
 
         assert result.id == 1
         assert result.title == "Product Manager"
         assert result.is_relevant is True
+        assert result.links_json[0].type == "apply_direct"
 
 
 class TestCreateVacanciesBatch:
@@ -85,6 +88,7 @@ class TestCreateVacanciesBatch:
                 "relevance_reason": None,
                 "status": "new",
                 "apply_link": None,
+                "links_json": [],
                 "notes": None,
                 "cover_letter": None,
                 "raw_snippet": None,
@@ -108,6 +112,7 @@ class TestCreateVacanciesBatch:
                 "relevance_reason": None,
                 "status": "new",
                 "apply_link": None,
+                "links_json": [],
                 "notes": None,
                 "cover_letter": None,
                 "raw_snippet": None,
@@ -165,6 +170,7 @@ class TestGetRelevantVacancies:
                 "relevance_reason": "Good match",
                 "status": "new",
                 "apply_link": None,
+                "links_json": [],
                 "notes": None,
                 "cover_letter": None,
                 "raw_snippet": "Job...",
@@ -210,6 +216,7 @@ class TestGetVacanciesByPostId:
                 "relevance_reason": None,
                 "status": "new",
                 "apply_link": None,
+                "links_json": [],
                 "notes": None,
                 "cover_letter": None,
                 "raw_snippet": None,
@@ -255,6 +262,7 @@ class TestUpdateVacancy:
                 "relevance_reason": None,
                 "status": "applied",
                 "apply_link": "https://apply.com",
+                "links_json": [],
                 "notes": "Applied via email",
                 "cover_letter": None,
                 "raw_snippet": None,
@@ -306,6 +314,7 @@ class TestGetVacanciesByStatus:
                 "relevance_reason": None,
                 "status": "applied",
                 "apply_link": None,
+                "links_json": [],
                 "notes": None,
                 "cover_letter": None,
                 "raw_snippet": None,
@@ -354,6 +363,7 @@ class TestGetNewRelevantVacancies:
                 "relevance_reason": "Great match",
                 "status": "new",
                 "apply_link": None,
+                "links_json": [],
                 "notes": None,
                 "cover_letter": None,
                 "raw_snippet": "Job...",

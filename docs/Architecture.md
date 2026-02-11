@@ -4,6 +4,7 @@
 - main.py: application entry point and orchestration.
 - src/job_finder/config.py: environment-based credentials and infrastructure config.
 - src/job_finder/scraper.py: Telethon client and message collection.
+- src/job_finder/link_extraction.py: raw URL extraction from post text, entities, and inline buttons.
 - src/job_finder/llm_client.py: LLM request and response handling.
 - src/job_finder/digest.py: digest rendering in Markdown.
 - src/job_finder/bot_control.py: Telegram Bot API control bot and commands.
@@ -23,7 +24,7 @@
 - Vercel for frontend hosting.
 
 ## Data Flow Summary
-- Telegram posts are fetched and written to the posts table.
-- LLM analysis creates vacancies and marks posts as analyzed.
+- Telegram posts are fetched, normalized, and stored with raw post links in `posts.links`.
+- LLM analysis creates vacancies with `apply_link` and structured `links_json`, then marks posts as analyzed.
 - Relevant vacancies are normalized and rendered into the digest.
 - Each run is tracked in the runs table for UI visibility.

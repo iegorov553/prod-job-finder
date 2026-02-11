@@ -77,6 +77,10 @@ def test_analyze_posts_db_parses_response(monkeypatch) -> None:
                         "language": "en",
                         "raw_snippet": "snippet",
                         "apply_link": "https://example.com/apply",
+                        "links_json": [
+                            {"url": "https://example.com/apply", "type": "apply_direct"},
+                            {"url": "https://linkedin.com/jobs/view/1", "type": "job_board_post"},
+                        ],
                     }
                 ],
             }
@@ -99,6 +103,8 @@ def test_analyze_posts_db_parses_response(monkeypatch) -> None:
     assert result[0].vacancies[0].salary_max_usd == 130000
     assert result[0].vacancies[0].title == "Senior PM"
     assert result[0].vacancies[0].company == "Acme"
+    assert len(result[0].vacancies[0].links_json) == 2
+    assert result[0].vacancies[0].links_json[0].type == "apply_direct"
     assert logs, "Logs should be collected"
 
 
@@ -208,6 +214,43 @@ def test_analyze_posts_db_legacy_format(monkeypatch) -> None:
     assert len(result) == 1
     assert len(result[0].vacancies) == 1
     assert result[0].vacancies[0].title == "Senior Product Manager"
+    assert result[0].vacancies[0].links_json == []
+
+
+def test_analyze_posts_db_normalizes_invalid_links_json(monkeypatch) -> None:
+    posts = [_make_post(1, "Senior PM position")]
+    response_content = json.dumps(
+        [
+            {
+                "post_id": 1,
+                "vacancies": [
+                    {
+                        "is_relevant": True,
+                        "title": "Senior Product Manager",
+                        "apply_link": "not-a-url",
+                        "links_json": [
+                            {"url": "notaurl", "type": "apply_direct"},
+                            {"url": "https://good.example/link", "type": "unexpected_value"},
+                        ],
+                    }
+                ],
+            }
+        ]
+    )
+    payload = {"choices": [{"message": {"content": response_content}}]}
+
+    def fake_post(url: str, headers: Dict[str, str], json: Dict[str, Any], timeout: int):
+        return DummyResponse(payload)
+
+    monkeypatch.setattr("job_finder.llm_client.requests.post", fake_post)
+    result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
+
+    assert len(result) == 1
+    assert len(result[0].vacancies) == 1
+    assert result[0].vacancies[0].apply_link is None
+    assert len(result[0].vacancies[0].links_json) == 1
+    assert result[0].vacancies[0].links_json[0].url == "https://good.example/link"
+    assert result[0].vacancies[0].links_json[0].type == "other"
 
 
 def test_analyze_posts_db_marks_failed_on_http_error(monkeypatch) -> None:

@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from job_finder.db.models import SettingsDB, SettingsUpdate
+from job_finder.db.models import SettingsDB, SettingsUpdate, VacancyCreate, VacancyDB, VacancyLink
 
 # Test constant for required custom_prompt field
 TEST_PROMPT = "Test system prompt for job analysis."
@@ -267,3 +267,38 @@ class TestSettingsUpdate:
         """Should return empty dict for empty update."""
         update = SettingsUpdate()
         assert update.to_db_dict() == {}
+
+
+class TestVacancyLinks:
+    """Tests for vacancy link models."""
+
+    def test_vacancy_link_defaults_to_other_type(self) -> None:
+        link = VacancyLink(url="https://example.com/apply")
+        assert link.type == "other"
+
+    def test_vacancy_create_accepts_links_json(self) -> None:
+        vacancy = VacancyCreate(
+            post_id=1,
+            links_json=[
+                VacancyLink(url="https://example.com/apply", type="apply_direct"),
+                VacancyLink(url="https://linkedin.com/jobs/view/1", type="job_board_post"),
+            ],
+        )
+        assert len(vacancy.links_json) == 2
+        assert vacancy.links_json[0].type == "apply_direct"
+
+    def test_vacancy_db_parses_links_json_from_dicts(self) -> None:
+        vacancy = VacancyDB.model_validate(
+            {
+                "id": 1,
+                "post_id": 1,
+                "remote_type": "unknown",
+                "is_relevant": False,
+                "status": "new",
+                "links_json": [
+                    {"url": "https://example.com/apply", "type": "apply_direct"},
+                    {"url": "https://company.com/jobs/1", "type": "job_description"},
+                ],
+            }
+        )
+        assert vacancy.links_json[1].type == "job_description"
