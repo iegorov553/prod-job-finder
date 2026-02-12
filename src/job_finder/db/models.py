@@ -14,6 +14,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Type aliases for better readability
 AnalysisStatus = Literal["pending", "completed", "failed"]
+AnalysisErrorCode = Literal[
+    "http_4xx",
+    "http_5xx",
+    "timeout",
+    "empty_response",
+    "json_parse_error",
+    "post_id_mismatch",
+    "unknown",
+]
 VacancyStatus = Literal["new", "saved", "applied", "interview", "rejected", "offer"]
 Seniority = Literal["junior", "middle", "senior", "lead", "head", "other"]
 RemoteType = Literal["remote", "hybrid", "onsite", "unknown"]
@@ -70,6 +79,11 @@ class PostDB(BaseModel):
     analyzed_at: Optional[datetime] = None
     analysis_status: AnalysisStatus = "pending"
     vacancies_count: int = 0
+    analysis_error_code: Optional[AnalysisErrorCode] = None
+    analysis_error_message: Optional[str] = None
+    analysis_http_status: Optional[int] = None
+    analysis_attempts: int = 0
+    analysis_run_id: Optional[int] = None
     created_at: Optional[datetime] = None
 
 
@@ -90,6 +104,26 @@ class PostUpdate(BaseModel):
     analyzed_at: Optional[datetime] = None
     analysis_status: Optional[AnalysisStatus] = None
     vacancies_count: Optional[int] = None
+    analysis_error_code: Optional[AnalysisErrorCode] = None
+    analysis_error_message: Optional[str] = None
+    analysis_http_status: Optional[int] = None
+    analysis_attempts: Optional[int] = None
+    analysis_run_id: Optional[int] = None
+
+
+class PostAnalysisAttemptCreate(BaseModel):
+    """Model for creating a post_analysis_attempts record."""
+
+    post_id: int
+    run_id: Optional[int] = None
+    batch_id: Optional[str] = None
+    attempt_no: int
+    model_name: str
+    timeout_sec: int
+    http_status: Optional[int] = None
+    error_code: Optional[AnalysisErrorCode] = None
+    error_message: Optional[str] = None
+    response_excerpt: Optional[str] = None
 
 
 class VacancyDB(BaseModel):
@@ -370,6 +404,7 @@ class RunUpdate(BaseModel):
 # Re-export for easier imports
 __all__ = [
     "AnalysisStatus",
+    "AnalysisErrorCode",
     "VacancyStatus",
     "Seniority",
     "RemoteType",
@@ -382,6 +417,7 @@ __all__ = [
     "PostDB",
     "PostCreate",
     "PostUpdate",
+    "PostAnalysisAttemptCreate",
     "VacancyDB",
     "VacancyCreate",
     "VacancyUpdate",

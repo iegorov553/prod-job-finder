@@ -6,6 +6,7 @@ from job_finder.db.client import (
     init_supabase,
     reset_client,
 )
+from job_finder.db.post_analysis_attempts import create_post_analysis_attempts
 from job_finder.db.settings import (
     ensure_settings_exist,
     get_settings,
@@ -27,4 +28,5 @@ __all__ = [
     "reset_llm_temperature",
     "update_settings_field",
     "upsert_settings",
+    "create_post_analysis_attempts",
 ]

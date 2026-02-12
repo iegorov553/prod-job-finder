@@ -13,6 +13,7 @@
 - src/job_finder/api/*: FastAPI HTTP endpoints (e.g., /api/run).
 - src/job_finder/settings_manager.py: cached access to Supabase settings.
 - src/job_finder/db/*: Supabase client and CRUD for posts, vacancies, channel states, settings, runs.
+- src/job_finder/db/post_analysis_attempts.py: persistence for per-post LLM attempt diagnostics.
 - src/job_finder/resources/messages.py: user-facing strings.
 - apps/web: Next.js frontend (Run & Vacancies, Settings).
 
@@ -26,5 +27,6 @@
 ## Data Flow Summary
 - Telegram posts are fetched, normalized, and stored with raw post links in `posts.links`.
 - LLM analysis creates vacancies with `apply_link` and structured `links_json`, then marks posts as analyzed.
+- Failed analysis keeps structured diagnostics (`analysis_error_*`) and writes attempt logs to `post_analysis_attempts`.
 - Relevant vacancies are normalized and rendered into the digest.
 - Each run is tracked in the runs table for UI visibility.

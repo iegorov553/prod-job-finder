@@ -175,10 +175,15 @@ def update_post_analysis(post_id: int, update: PostUpdate) -> Optional[PostDB]:
     return cast(PostDB, PostDB.model_validate(response.data[0]))
 
 
-def mark_posts_analyzed(
+def mark_posts_analyzed(  # noqa: C901
     post_ids: List[int],
     status: str = "completed",
     vacancies_counts: Optional[dict[int, int]] = None,
+    analysis_error_code: Optional[str] = None,
+    analysis_error_message: Optional[str] = None,
+    analysis_http_status: Optional[int] = None,
+    attempts_by_post: Optional[dict[int, int]] = None,
+    analysis_run_id: Optional[int] = None,
 ) -> int:
     """Mark multiple posts as analyzed.
 
@@ -186,6 +191,11 @@ def mark_posts_analyzed(
         post_ids: List of post IDs to update
         status: New analysis status
         vacancies_counts: Optional dict mapping post_id to vacancies_count
+        analysis_error_code: Optional failure reason code for failed posts
+        analysis_error_message: Optional failure message for failed posts
+        analysis_http_status: Optional HTTP status for failed posts
+        attempts_by_post: Optional dict mapping post_id to attempts count
+        analysis_run_id: Optional run identifier
 
     Returns:
         Number of posts updated
@@ -207,6 +217,29 @@ def mark_posts_analyzed(
 
         if vacancies_counts and post_id in vacancies_counts:
             payload["vacancies_count"] = vacancies_counts[post_id]
+
+        if status == "failed":
+            payload["analysis_error_code"] = analysis_error_code
+            payload["analysis_error_message"] = analysis_error_message
+            payload["analysis_http_status"] = analysis_http_status
+            if attempts_by_post and post_id in attempts_by_post:
+                payload["analysis_attempts"] = attempts_by_post[post_id]
+            if analysis_run_id is not None:
+                payload["analysis_run_id"] = analysis_run_id
+        elif status == "pending":
+            payload["analysis_error_code"] = None
+            payload["analysis_error_message"] = None
+            payload["analysis_http_status"] = None
+            payload["analysis_attempts"] = 0
+            payload["analysis_run_id"] = None
+        else:
+            payload["analysis_error_code"] = None
+            payload["analysis_error_message"] = None
+            payload["analysis_http_status"] = None
+            if attempts_by_post and post_id in attempts_by_post:
+                payload["analysis_attempts"] = attempts_by_post[post_id]
+            if analysis_run_id is not None:
+                payload["analysis_run_id"] = analysis_run_id
 
         response = client.table(TABLE_NAME).update(payload).eq("id", post_id).execute()
         if response.data:

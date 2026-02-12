@@ -22,7 +22,7 @@ from job_finder.db.channel_states import (
 )
 from job_finder.db.models import PostCreate, VacancyCreate
 from job_finder.db.posts import create_posts_batch, mark_posts_analyzed
-from job_finder.db.runs import mark_running_failed
+from job_finder.db.runs import get_running_run, mark_running_failed
 from job_finder.db.settings import ensure_settings_exist
 from job_finder.db.vacancies import create_vacancies_batch
 from job_finder.llm_client import LLMConfig
@@ -203,12 +203,18 @@ async def _run_once(  # noqa: C901
     # Build LLM config from credentials + settings
     llm_config = _build_llm_config(config, settings_manager)
 
+    current_run = get_running_run()
+    run_id = current_run.id if current_run is not None else None
+    attempts_by_post: dict[int, int] = {}
+
     analysis_results = llm_client.analyze_posts_db(
         db_posts,
         llm_config,
         custom_prompt,
         logs=llm_logs,
         progress_cb=progress_cb,
+        run_id=run_id,
+        attempts_out=attempts_by_post,
     )
 
     if llm_logs and not any(item.get("parsed_ok") for item in llm_logs if isinstance(item, dict)):
@@ -254,7 +260,13 @@ async def _run_once(  # noqa: C901
 
     # Mark posts as analyzed
     analyzed_post_ids = [r.post_id for r in analysis_results]
-    mark_posts_analyzed(analyzed_post_ids, "completed", vacancies_counts)
+    mark_posts_analyzed(
+        analyzed_post_ids,
+        "completed",
+        vacancies_counts,
+        attempts_by_post=attempts_by_post,
+        analysis_run_id=run_id,
+    )
 
     logger.info("Saved %s vacancies (%s relevant)", total_vacancies, relevant_count)
 

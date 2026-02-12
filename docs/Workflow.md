@@ -11,11 +11,13 @@ This describes what happens during a single run execution (via /run or the HTTP 
 6. Extract raw links per post from text, Telegram entities, and inline buttons; persist into `posts.links`.
 7. Persist posts to the posts table (upsert by channel and telegram_id).
 8. Send posts to the LLM in batches and parse multi-vacancy results.
-9. Persist vacancies (including `apply_link` and `links_json`) and mark posts as analyzed.
-10. Update last_message_id per channel (only when new Telegram posts were fetched).
-11. Query new relevant vacancies and build the digest.
-12. Persist run status and digest to the runs table.
-13. Send the digest to the user via the control bot.
+9. If a batch parse fails, retry with smaller chunks (`N -> N/2 -> 1`) to recover partial results.
+10. Persist per-post failure diagnostics (`analysis_error_code`, HTTP status, attempts, run id) and attempt logs.
+11. Persist vacancies (including `apply_link` and `links_json`) and mark posts as analyzed.
+12. Update last_message_id per channel (only when new Telegram posts were fetched).
+13. Query new relevant vacancies and build the digest.
+14. Persist run status and digest to the runs table.
+15. Send the digest to the user via the control bot.
 
 ## Control Bot Responses
 - If an analysis run returns an empty message (for example via /retry_failed), the control bot sends a fallback message instead of failing.

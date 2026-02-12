@@ -324,25 +324,38 @@ class TestMarkPostsAnalyzed:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.data = [{"id": 1}]
-        mock_client.table.return_value.update.return_value.eq.return_value.execute.return_value = (
-            mock_response
-        )
+        mock_update = mock_client.table.return_value.update
+        mock_update.return_value.eq.return_value.execute.return_value = mock_response
 
         with patch("job_finder.db.posts.get_supabase_client", return_value=mock_client):
             from job_finder.db.posts import mark_posts_analyzed
 
-            count = mark_posts_analyzed([1], status="failed", vacancies_counts=None)
+            count = mark_posts_analyzed(
+                [1],
+                status="failed",
+                vacancies_counts=None,
+                analysis_error_code="timeout",
+                analysis_error_message="Request timed out",
+                analysis_http_status=None,
+                attempts_by_post={1: 3},
+                analysis_run_id=6,
+            )
 
         assert count == 1
+        payload = mock_update.call_args[0][0]
+        assert payload["analysis_status"] == "failed"
+        assert payload["analysis_error_code"] == "timeout"
+        assert payload["analysis_error_message"] == "Request timed out"
+        assert payload["analysis_attempts"] == 3
+        assert payload["analysis_run_id"] == 6
 
     def test_mark_posts_pending(self) -> None:
         """Should reset posts to pending status for retry."""
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.data = [{"id": 1}]
-        mock_client.table.return_value.update.return_value.eq.return_value.execute.return_value = (
-            mock_response
-        )
+        mock_update = mock_client.table.return_value.update
+        mock_update.return_value.eq.return_value.execute.return_value = mock_response
 
         with patch("job_finder.db.posts.get_supabase_client", return_value=mock_client):
             from job_finder.db.posts import mark_posts_analyzed
@@ -350,6 +363,13 @@ class TestMarkPostsAnalyzed:
             count = mark_posts_analyzed([1], status="pending", vacancies_counts=None)
 
         assert count == 1
+        payload = mock_update.call_args[0][0]
+        assert payload["analysis_status"] == "pending"
+        assert payload["analysis_error_code"] is None
+        assert payload["analysis_error_message"] is None
+        assert payload["analysis_http_status"] is None
+        assert payload["analysis_attempts"] == 0
+        assert payload["analysis_run_id"] is None
 
     def test_mark_posts_empty_list(self) -> None:
         """Should return 0 for empty post list."""

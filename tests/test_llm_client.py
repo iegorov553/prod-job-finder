@@ -409,10 +409,12 @@ def test_analyze_posts_db_marks_failed_on_bad_json(monkeypatch) -> None:
         result = analyze_posts_db(posts, _llm_config(), CUSTOM_PROMPT, [])
 
     assert result == []
-    mock_mark_analyzed.assert_called_once()
-    call_args = mock_mark_analyzed.call_args
-    assert set(call_args[0][0]) == {1, 2}
-    assert call_args[1]["status"] == "failed"
+    assert mock_mark_analyzed.call_count >= 1
+    failed_ids: set[int] = set()
+    for call in mock_mark_analyzed.call_args_list:
+        failed_ids.update(call[0][0])
+        assert call[1]["status"] == "failed"
+    assert failed_ids == {1, 2}
 
 
 def test_analyze_posts_db_marks_failed_on_empty_array_response(monkeypatch) -> None:
