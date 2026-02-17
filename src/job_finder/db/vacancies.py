@@ -10,7 +10,7 @@ import logging
 from typing import Any, List, Optional, cast
 
 from job_finder.db.client import get_supabase_client
-from job_finder.db.models import VacancyCreate, VacancyDB, VacancyUpdate
+from job_finder.db.models import VacancyCreate, VacancyDB, VacancyEnrichmentUpdate, VacancyUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,17 @@ def create_vacancies_batch(vacancies: List[VacancyCreate]) -> List[VacancyDB]:
     response = client.table(TABLE_NAME).insert(payloads).execute()
 
     return [VacancyDB.model_validate(row) for row in response.data]
+
+
+def update_vacancies_enrichment(updates: List[VacancyEnrichmentUpdate]) -> int:
+    """Update enrichment fields for multiple vacancies in one request."""
+    if not updates:
+        return 0
+
+    client = get_supabase_client()
+    payloads = [item.model_dump(mode="json", exclude_none=True) for item in updates]
+    response = client.table(TABLE_NAME).upsert(payloads, on_conflict="id").execute()
+    return len(response.data)
 
 
 def get_vacancy_by_id(vacancy_id: int) -> Optional[VacancyDB]:

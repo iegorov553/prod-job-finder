@@ -20,17 +20,18 @@ from job_finder.db.channel_states import (
     get_all_channel_states,
     update_last_message_id,
 )
-from job_finder.db.models import PostCreate, VacancyCreate
+from job_finder.db.models import PostCreate, VacancyCreate, VacancyDB
 from job_finder.db.posts import create_posts_batch, mark_posts_analyzed
 from job_finder.db.runs import get_running_run, mark_running_failed
 from job_finder.db.settings import ensure_settings_exist
-from job_finder.db.vacancies import create_vacancies_batch
+from job_finder.db.vacancies import create_vacancies_batch, update_vacancies_enrichment
 from job_finder.llm_client import LLMConfig
 from job_finder.resources import api_messages, messages
 from job_finder.run_service import RunInProgressError, RunService
 from job_finder.scheduler import PipelineScheduler, SchedulerConfig
 from job_finder.settings_manager import SettingsManager, init_settings_manager
 from job_finder.utils.locks import PipelineLock
+from job_finder.vacancy_enrichment import EnrichmentConfig, enrich_vacancies
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -229,6 +230,7 @@ async def _run_once(  # noqa: C901
     total_vacancies = 0
     relevant_count = 0
     vacancies_counts: dict[int, int] = {}
+    created_vacancies: list[VacancyDB] = []
 
     for result in analysis_results:
         vacancies_to_create = [
@@ -257,6 +259,7 @@ async def _run_once(  # noqa: C901
             total_vacancies += len(created)
             relevant_count += sum(1 for v in created if v.is_relevant)
             vacancies_counts[result.post_id] = len(created)
+            created_vacancies.extend(created)
 
     # Mark posts as analyzed
     analyzed_post_ids = [r.post_id for r in analysis_results]
@@ -269,6 +272,28 @@ async def _run_once(  # noqa: C901
     )
 
     logger.info("Saved %s vacancies (%s relevant)", total_vacancies, relevant_count)
+    if created_vacancies:
+        enrichment_config = EnrichmentConfig(
+            api_key=config.llm_api_key,
+            base_url=config.llm_base_url,
+        )
+        try:
+            enrichment_updates = enrich_vacancies(created_vacancies, enrichment_config)
+            updated_count = update_vacancies_enrichment(enrichment_updates)
+            enrichment_success = sum(
+                1 for item in enrichment_updates if item.enrichment_status == "success"
+            )
+            enrichment_failed = sum(
+                1 for item in enrichment_updates if item.enrichment_status == "failed"
+            )
+            logger.info(
+                "Vacancy enrichment finished: %s updated (%s success, %s failed)",
+                updated_count,
+                enrichment_success,
+                enrichment_failed,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Vacancy enrichment failed: %s", exc)
 
     # Save LLM logs
     if llm_logs:

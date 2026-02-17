@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from job_finder.db.models import VacancyCreate, VacancyLink, VacancyUpdate
+from job_finder.db.models import (
+    VacancyCreate,
+    VacancyEnrichmentUpdate,
+    VacancyLink,
+    VacancyUpdate,
+)
 
 
 class TestCreateVacancy:
@@ -410,3 +415,48 @@ class TestGetNewRelevantVacancies:
         # Check that the timestamp is today's start (allow small time delta)
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         assert call_args[1].startswith(today_start.date().isoformat())
+
+
+class TestUpdateVacanciesEnrichment:
+    """Tests for update_vacancies_enrichment function."""
+
+    def test_update_vacancies_enrichment_batch(self) -> None:
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [
+            {"id": 1},
+            {"id": 2},
+        ]
+        mock_client.table.return_value.upsert.return_value.execute.return_value = mock_response
+
+        with patch("job_finder.db.vacancies.get_supabase_client", return_value=mock_client):
+            from job_finder.db.vacancies import update_vacancies_enrichment
+
+            updates = [
+                VacancyEnrichmentUpdate(
+                    id=1,
+                    enrichment_status="success",
+                    enrichment_attempts=1,
+                    vacancy_text_full="Vacancy text",
+                    vacancy_text_source_url="https://jobs.example/1",
+                ),
+                VacancyEnrichmentUpdate(
+                    id=2,
+                    enrichment_status="failed",
+                    enrichment_attempts=2,
+                    enrichment_error="No useful text found",
+                ),
+            ]
+
+            updated_count = update_vacancies_enrichment(updates)
+
+        assert updated_count == 2
+        mock_client.table.return_value.upsert.assert_called_once()
+
+    def test_update_vacancies_enrichment_empty(self) -> None:
+        with patch("job_finder.db.vacancies.get_supabase_client"):
+            from job_finder.db.vacancies import update_vacancies_enrichment
+
+            result = update_vacancies_enrichment([])
+
+        assert result == 0

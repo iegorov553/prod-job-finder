@@ -6,6 +6,7 @@
 - src/job_finder/scraper.py: Telethon client and message collection.
 - src/job_finder/link_extraction.py: raw URL extraction from post text, entities, and inline buttons.
 - src/job_finder/llm_client.py: LLM request and response handling.
+- src/job_finder/vacancy_enrichment.py: link-based vacancy text enrichment (`requests` + `trafilatura` + LLM cleanup).
 - src/job_finder/digest.py: digest rendering in Markdown.
 - src/job_finder/bot_control.py: Telegram Bot API control bot and commands.
 - src/job_finder/scheduler.py: daily scheduling of runs.
@@ -15,6 +16,7 @@
 - src/job_finder/db/*: Supabase client and CRUD for posts, vacancies, channel states, settings, runs.
 - src/job_finder/db/post_analysis_attempts.py: persistence for per-post LLM attempt diagnostics.
 - src/job_finder/resources/messages.py: user-facing strings.
+- src/job_finder/resources/enrichment_prompts.py: prompt templates for enrichment LLM subtasks.
 - apps/web: Next.js frontend (Run & Vacancies, Settings).
 
 ## External Services
@@ -27,6 +29,7 @@
 ## Data Flow Summary
 - Telegram posts are fetched, normalized, and stored with raw post links in `posts.links`.
 - LLM analysis creates vacancies with `apply_link` and structured `links_json`, then marks posts as analyzed.
+- Enrichment fetches external vacancy pages, extracts text, and persists per-vacancy enrichment status and diagnostics.
 - Failed analysis keeps structured diagnostics (`analysis_error_*`) and writes attempt logs to `post_analysis_attempts`.
 - Relevant vacancies are normalized and rendered into the digest.
 - Each run is tracked in the runs table for UI visibility.

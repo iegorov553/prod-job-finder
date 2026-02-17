@@ -24,6 +24,12 @@ export type VacancyRecord = {
   title: string | null;
   company: string | null;
   status: VacancyStatus;
+  enrichment_status: "pending" | "success" | "failed";
+  enrichment_attempts: number;
+  enrichment_error: string | null;
+  enrichment_completed_at: string | null;
+  vacancy_text_full: string | null;
+  vacancy_text_source_url: string | null;
   is_relevant: boolean;
   location: string | null;
   level: string | null;

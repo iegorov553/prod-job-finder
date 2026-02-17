@@ -8,6 +8,13 @@
 - vacancies: extracted job vacancies, relevance, status, and salary fields.
   - `apply_link` is selected by LLM from post URLs.
   - `links_json` stores vacancy-scoped links as JSON objects: `{ "url": "...", "type": "..." }`.
+  - Enrichment fields:
+    - `enrichment_status`: `pending|success|failed`.
+    - `enrichment_attempts`: number of HTTP attempts performed for enrichment.
+    - `enrichment_error`: last enrichment error message (if failed).
+    - `enrichment_completed_at`: timestamp of enrichment completion.
+    - `vacancy_text_full`: cleaned vacancy text extracted from linked pages.
+    - `vacancy_text_source_url`: URL that produced `vacancy_text_full`.
 - post_analysis_attempts: per-post LLM attempt logs for troubleshooting (batch id, attempt no, HTTP
   status, error code/message, and response excerpt).
 - channel_states: per-channel last_message_id tracking.
@@ -28,3 +35,4 @@
 - migrations/008_update_default_prompt_with_links.sql: updates legacy default prompt with link typing/output rules.
 - migrations/009_post_analysis_diagnostics.sql: post failure diagnostics and
   `post_analysis_attempts` table.
+- migrations/010_vacancy_enrichment.sql: vacancy enrichment status and extracted text fields.

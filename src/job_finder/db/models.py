@@ -24,6 +24,7 @@ AnalysisErrorCode = Literal[
     "unknown",
 ]
 VacancyStatus = Literal["new", "saved", "applied", "interview", "rejected", "offer"]
+EnrichmentStatus = Literal["pending", "success", "failed"]
 Seniority = Literal["junior", "middle", "senior", "lead", "head", "other"]
 RemoteType = Literal["remote", "hybrid", "onsite", "unknown"]
 Language = Literal["en", "ru", "other"]
@@ -146,6 +147,12 @@ class VacancyDB(BaseModel):
     is_relevant: bool = False
     relevance_reason: Optional[str] = None
     status: VacancyStatus = "new"
+    enrichment_status: EnrichmentStatus = "pending"
+    enrichment_attempts: int = 0
+    enrichment_error: Optional[str] = None
+    enrichment_completed_at: Optional[datetime] = None
+    vacancy_text_full: Optional[str] = None
+    vacancy_text_source_url: Optional[str] = None
     apply_link: Optional[str] = None
     links_json: List[VacancyLink] = Field(default_factory=list)
     notes: Optional[str] = None
@@ -183,6 +190,18 @@ class VacancyUpdate(BaseModel):
     notes: Optional[str] = None
     cover_letter: Optional[str] = None
     apply_link: Optional[str] = None
+
+
+class VacancyEnrichmentUpdate(BaseModel):
+    """Model for updating vacancy enrichment fields."""
+
+    id: int
+    enrichment_status: EnrichmentStatus
+    enrichment_attempts: int
+    enrichment_error: Optional[str] = None
+    enrichment_completed_at: Optional[datetime] = None
+    vacancy_text_full: Optional[str] = None
+    vacancy_text_source_url: Optional[str] = None
 
 
 class VacancyFromLLM(BaseModel):
@@ -406,6 +425,7 @@ __all__ = [
     "AnalysisStatus",
     "AnalysisErrorCode",
     "VacancyStatus",
+    "EnrichmentStatus",
     "Seniority",
     "RemoteType",
     "Language",
@@ -421,6 +441,7 @@ __all__ = [
     "VacancyDB",
     "VacancyCreate",
     "VacancyUpdate",
+    "VacancyEnrichmentUpdate",
     "PostAnalysisResult",
     "VacancyFromLLM",
     "SettingsDB",

@@ -1,5 +1,6 @@
 import sys
 import types
+from importlib.util import find_spec
 
 
 def pytest_configure(config):  # noqa: C901
@@ -95,3 +96,113 @@ def pytest_configure(config):  # noqa: C901
 
         cron_mod.CronTrigger = CronTrigger
         sys.modules["apscheduler.triggers.cron"] = cron_mod
+
+    if find_spec("fastapi") is None and "fastapi" not in sys.modules:
+        fastapi = types.ModuleType("fastapi")
+
+        class FastAPI:
+            def __init__(self, *args, **kwargs):
+                self.state = types.SimpleNamespace()
+                self._routes = {}
+
+            def include_router(self, router):
+                self._routes.update(router._routes)
+
+        class APIRouter:
+            def __init__(self):
+                self._routes = {}
+
+            def post(self, path: str, status_code: int = 200, **kwargs):
+                def _decorator(func):
+                    self._routes[("POST", path)] = (func, status_code)
+                    return func
+
+                return _decorator
+
+        class HTTPException(Exception):
+            def __init__(self, status_code: int, detail: str | None = None):
+                super().__init__(detail)
+                self.status_code = status_code
+                self.detail = detail
+
+        class Request:
+            def __init__(self):
+                self.app = types.SimpleNamespace(state=types.SimpleNamespace())
+
+        def Header(default=None):  # noqa: N802
+            return default
+
+        fastapi.FastAPI = FastAPI
+        fastapi.APIRouter = APIRouter
+        fastapi.HTTPException = HTTPException
+        fastapi.Request = Request
+        fastapi.Header = Header
+        fastapi.status = types.SimpleNamespace(
+            HTTP_202_ACCEPTED=202,
+            HTTP_401_UNAUTHORIZED=401,
+            HTTP_409_CONFLICT=409,
+        )
+        sys.modules["fastapi"] = fastapi
+
+        testclient = types.ModuleType("fastapi.testclient")
+
+        class _Response:
+            def __init__(self, status_code: int, data: dict):
+                self.status_code = status_code
+                self._data = data
+
+            def json(self) -> dict:
+                return self._data
+
+        class TestClient:
+            __test__ = False
+
+            def __init__(self, app):
+                self.app = app
+
+            def post(self, path: str, headers: dict | None = None):
+                import asyncio
+                import inspect
+
+                route = self.app._routes.get(("POST", path))
+                if route is None:
+                    return _Response(404, {"detail": "Not Found"})
+                handler, success_status = route
+                request = Request()
+                request.app = self.app
+                kwargs = {}
+                params = inspect.signature(handler).parameters
+                if "request" in params:
+                    kwargs["request"] = request
+                if "authorization" in params:
+                    kwargs["authorization"] = headers.get("Authorization") if headers else None
+                try:
+                    data = asyncio.run(handler(**kwargs))
+                    return _Response(success_status, data)
+                except HTTPException as exc:
+                    return _Response(exc.status_code, {"detail": exc.detail})
+
+        testclient.TestClient = TestClient
+        sys.modules["fastapi.testclient"] = testclient
+
+    if find_spec("uvicorn") is None and "uvicorn" not in sys.modules:
+        uvicorn = types.ModuleType("uvicorn")
+
+        class Config:
+            def __init__(self, app, host: str, port: int, log_level: str = "info"):
+                self.app = app
+                self.host = host
+                self.port = port
+                self.log_level = log_level
+
+        class Server:
+            def __init__(self, config):
+                self.config = config
+                self.should_exit = False
+
+            async def serve(self):
+                return None
+
+        uvicorn.Config = Config
+        uvicorn.Server = Server
+        sys.modules["uvicorn"] = uvicorn

@@ -24,4 +24,5 @@ This folder describes how the Product Manager Telegram Job Digester works and ho
 - External services: Telegram (Telethon), LLM API (OpenAI compatible), Supabase (PostgreSQL)
 - Persistent data: Supabase tables defined in migrations/*.sql
 - Local outputs: relevant_log.jsonl, llm_logs/
+- Vacancy enrichment: link-based text extraction and cleanup stored in `vacancies` enrichment fields
 - Dependencies: managed via pyproject.toml (Poetry); requirements.txt is not used

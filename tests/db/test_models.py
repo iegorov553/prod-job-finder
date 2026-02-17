@@ -302,3 +302,20 @@ class TestVacancyLinks:
             }
         )
         assert vacancy.links_json[1].type == "job_description"
+
+    def test_vacancy_db_enrichment_defaults(self) -> None:
+        vacancy = VacancyDB.model_validate(
+            {
+                "id": 1,
+                "post_id": 1,
+                "remote_type": "unknown",
+                "is_relevant": False,
+                "status": "new",
+            }
+        )
+        assert vacancy.enrichment_status == "pending"
+        assert vacancy.enrichment_attempts == 0
+        assert vacancy.enrichment_error is None
+        assert vacancy.vacancy_text_full is None
+        assert vacancy.vacancy_text_source_url is None
+        assert vacancy.enrichment_completed_at is None
