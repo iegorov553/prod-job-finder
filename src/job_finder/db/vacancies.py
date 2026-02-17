@@ -55,14 +55,21 @@ def create_vacancies_batch(vacancies: List[VacancyCreate]) -> List[VacancyDB]:
 
 
 def update_vacancies_enrichment(updates: List[VacancyEnrichmentUpdate]) -> int:
-    """Update enrichment fields for multiple vacancies in one request."""
+    """Update enrichment fields for multiple vacancies."""
     if not updates:
         return 0
 
     client = get_supabase_client()
-    payloads = [item.model_dump(mode="json", exclude_none=True) for item in updates]
-    response = client.table(TABLE_NAME).upsert(payloads, on_conflict="id").execute()
-    return len(response.data)
+    updated = 0
+
+    for item in updates:
+        payload = item.model_dump(mode="json", exclude_none=True)
+        vacancy_id = payload.pop("id")
+        response = client.table(TABLE_NAME).update(payload).eq("id", vacancy_id).execute()
+        if response.data:
+            updated += 1
+
+    return updated
 
 
 def get_vacancy_by_id(vacancy_id: int) -> Optional[VacancyDB]:

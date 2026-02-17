@@ -423,11 +423,10 @@ class TestUpdateVacanciesEnrichment:
     def test_update_vacancies_enrichment_batch(self) -> None:
         mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.data = [
-            {"id": 1},
-            {"id": 2},
-        ]
-        mock_client.table.return_value.upsert.return_value.execute.return_value = mock_response
+        mock_response.data = [{"id": 1}]
+        (
+            mock_client.table.return_value.update.return_value.eq.return_value.execute.return_value
+        ) = mock_response
 
         with patch("job_finder.db.vacancies.get_supabase_client", return_value=mock_client):
             from job_finder.db.vacancies import update_vacancies_enrichment
@@ -451,7 +450,7 @@ class TestUpdateVacanciesEnrichment:
             updated_count = update_vacancies_enrichment(updates)
 
         assert updated_count == 2
-        mock_client.table.return_value.upsert.assert_called_once()
+        assert mock_client.table.return_value.update.call_count == 2
 
     def test_update_vacancies_enrichment_empty(self) -> None:
         with patch("job_finder.db.vacancies.get_supabase_client"):
