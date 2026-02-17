@@ -95,6 +95,13 @@ class BotController:
         self.app.add_handler(CommandHandler("prompt_reset", self.handle_prompt_reset))
         # Retry commands
         self.app.add_handler(CommandHandler("retry_failed", self.handle_retry_failed))
+        # JobSpy commands
+        self.app.add_handler(CommandHandler("jobspy", self.handle_jobspy))
+        self.app.add_handler(CommandHandler("jobspy_toggle", self.handle_jobspy_toggle))
+        self.app.add_handler(CommandHandler("jobspy_sites", self.handle_jobspy_sites))
+        self.app.add_handler(CommandHandler("jobspy_search", self.handle_jobspy_search))
+        self.app.add_handler(CommandHandler("jobspy_location", self.handle_jobspy_location))
+        self.app.add_handler(CommandHandler("jobspy_results", self.handle_jobspy_results))
 
     async def _ensure_access(self, update: Update) -> Chat | None:
         if not self._is_allowed(update):
@@ -157,6 +164,9 @@ class BotController:
         lines.append("")
         lines.append(mdv2.bold(msg.HELP_PROMPT_HEADER))
         lines.extend(mdv2.escape(line) for line in msg.HELP_PROMPT)
+        lines.append("")
+        lines.append(mdv2.bold(msg.HELP_JOBSPY_HEADER))
+        lines.extend(mdv2.escape(line) for line in msg.HELP_JOBSPY)
         await self._send_message(chat, "\n".join(lines), formatted=True)
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -814,6 +824,211 @@ class BotController:
             formatted=result.is_markdown,
             disable_link_preview=True,
         )
+
+    # --- JobSpy Commands ---
+
+    async def handle_jobspy(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show current JobSpy settings."""
+        chat = await self._ensure_access(update)
+        if not chat:
+            return
+        if not self.settings_manager or not self.settings_manager.is_supabase_available():
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
+            return
+
+        settings = self.settings_manager.get_settings()
+        if not settings:
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
+            return
+
+        if settings.jobspy_enabled:
+            enabled_text = msg.JOBSPY_SETTINGS_ENABLED_ON
+        else:
+            enabled_text = msg.JOBSPY_SETTINGS_ENABLED_OFF
+        location_text = settings.jobspy_location or msg.JOBSPY_SETTINGS_LOCATION_NOT_SET
+        job_type_text = settings.jobspy_job_type or msg.JOBSPY_SETTINGS_JOB_TYPE_NOT_SET
+        if settings.jobspy_is_remote is None:
+            remote_text = msg.JOBSPY_SETTINGS_IS_REMOTE_NOT_SET
+        else:
+            remote_text = "да" if settings.jobspy_is_remote else "нет"
+
+        sites_val = mdv2.code(", ".join(settings.jobspy_sites))
+        terms_val = mdv2.code(", ".join(settings.jobspy_search_terms))
+        results_val = mdv2.code(str(settings.jobspy_results_wanted))
+        hours_val = mdv2.code(str(settings.jobspy_hours_old))
+
+        def _line(label: str, value: str) -> str:
+            return f"{mdv2.escape(label)}: {value}"
+
+        lines = [
+            mdv2.bold(msg.JOBSPY_SETTINGS_HEADER),
+            _line(msg.JOBSPY_SETTINGS_ENABLED, mdv2.code(enabled_text)),
+            _line(msg.JOBSPY_SETTINGS_SITES, sites_val),
+            _line(msg.JOBSPY_SETTINGS_SEARCH_TERMS, terms_val),
+            _line(msg.JOBSPY_SETTINGS_LOCATION, mdv2.code(location_text)),
+            _line(msg.JOBSPY_SETTINGS_COUNTRY, mdv2.code(settings.jobspy_country)),
+            _line(msg.JOBSPY_SETTINGS_RESULTS, results_val),
+            _line(msg.JOBSPY_SETTINGS_HOURS_OLD, hours_val),
+            _line(msg.JOBSPY_SETTINGS_JOB_TYPE, mdv2.code(job_type_text)),
+            _line(msg.JOBSPY_SETTINGS_IS_REMOTE, mdv2.code(remote_text)),
+        ]
+        await self._send_message(chat, "\n".join(lines), formatted=True)
+
+    async def handle_jobspy_toggle(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Toggle JobSpy on/off."""
+        chat = await self._ensure_access(update)
+        if not chat:
+            return
+        if not self.settings_manager or not self.settings_manager.is_supabase_available():
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
+            return
+
+        try:
+            current = self.settings_manager.get_jobspy_enabled()
+            new_value = not current
+
+            from job_finder.db.settings import update_settings_field
+
+            update_settings_field("jobspy_enabled", new_value)
+            self.settings_manager.invalidate_cache()
+            reply = msg.JOBSPY_TOGGLED_ON if new_value else msg.JOBSPY_TOGGLED_OFF
+            await self._send_message(chat, reply)
+        except Exception as e:
+            logger.exception("Failed to toggle jobspy")
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+
+    async def handle_jobspy_sites(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Set active JobSpy sites."""
+        chat = await self._ensure_access(update)
+        if not chat:
+            return
+        if not self.settings_manager or not self.settings_manager.is_supabase_available():
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
+            return
+
+        if not context.args:
+            await self._send_message(chat, msg.JOBSPY_SITES_USAGE)
+            return
+
+        # Parse comma-separated or space-separated sites
+        raw = " ".join(context.args)
+        sites = [s.strip().lower() for s in raw.replace(",", " ").split() if s.strip()]
+        valid_sites = {"linkedin", "indeed", "glassdoor", "google"}
+        invalid = [s for s in sites if s not in valid_sites]
+        if invalid:
+            await self._send_message(chat, msg.JOBSPY_SITES_INVALID)
+            return
+
+        try:
+            from job_finder.db.settings import update_settings_field
+
+            update_settings_field("jobspy_sites", sites)
+            self.settings_manager.invalidate_cache()
+            await self._send_message(chat, msg.JOBSPY_SITES_UPDATED.format(sites=", ".join(sites)))
+        except Exception as e:
+            logger.exception("Failed to update jobspy_sites")
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+
+    async def handle_jobspy_search(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Set JobSpy search terms."""
+        chat = await self._ensure_access(update)
+        if not chat:
+            return
+        if not self.settings_manager or not self.settings_manager.is_supabase_available():
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
+            return
+
+        if not context.args:
+            await self._send_message(chat, msg.JOBSPY_SEARCH_USAGE)
+            return
+
+        raw = " ".join(context.args)
+        terms = [t.strip() for t in raw.split(",") if t.strip()]
+        if not terms:
+            await self._send_message(chat, msg.JOBSPY_SEARCH_USAGE)
+            return
+
+        try:
+            from job_finder.db.settings import update_settings_field
+
+            update_settings_field("jobspy_search_terms", terms)
+            self.settings_manager.invalidate_cache()
+            await self._send_message(chat, msg.JOBSPY_SEARCH_UPDATED.format(terms=", ".join(terms)))
+        except Exception as e:
+            logger.exception("Failed to update jobspy_search_terms")
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+
+    async def handle_jobspy_location(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Set JobSpy location."""
+        chat = await self._ensure_access(update)
+        if not chat:
+            return
+        if not self.settings_manager or not self.settings_manager.is_supabase_available():
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
+            return
+
+        if not context.args:
+            await self._send_message(chat, msg.JOBSPY_LOCATION_USAGE)
+            return
+
+        value = " ".join(context.args).strip()
+
+        try:
+            from job_finder.db.settings import update_settings_field
+
+            if value.lower() in ("none", "reset", "clear"):
+                update_settings_field("jobspy_location", None)
+                self.settings_manager.invalidate_cache()
+                await self._send_message(chat, msg.JOBSPY_LOCATION_RESET)
+            else:
+                update_settings_field("jobspy_location", value)
+                self.settings_manager.invalidate_cache()
+                await self._send_message(chat, msg.JOBSPY_LOCATION_UPDATED.format(location=value))
+        except Exception as e:
+            logger.exception("Failed to update jobspy_location")
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
+
+    async def handle_jobspy_results(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Set JobSpy results_wanted."""
+        chat = await self._ensure_access(update)
+        if not chat:
+            return
+        if not self.settings_manager or not self.settings_manager.is_supabase_available():
+            await self._send_message(chat, msg.SETTINGS_DB_UNAVAILABLE)
+            return
+
+        if not context.args:
+            await self._send_message(chat, msg.JOBSPY_RESULTS_USAGE)
+            return
+
+        try:
+            count = int(context.args[0])
+            if count < 1 or count > 100:
+                await self._send_message(chat, msg.JOBSPY_RESULTS_INVALID)
+                return
+
+            from job_finder.db.settings import update_settings_field
+
+            update_settings_field("jobspy_results_wanted", count)
+            self.settings_manager.invalidate_cache()
+            await self._send_message(
+                chat,
+                msg.JOBSPY_RESULTS_UPDATED.format(count=mdv2.code(str(count))),
+                formatted=True,
+            )
+        except ValueError:
+            await self._send_message(chat, msg.JOBSPY_RESULTS_INVALID)
+        except Exception as e:
+            logger.exception("Failed to update jobspy_results_wanted")
+            await self._send_message(chat, msg.SETTINGS_UPDATE_ERROR.format(error=str(e)))
 
     async def run_polling(self) -> None:
         await self.app.initialize()

@@ -18,9 +18,13 @@ export type VacancyStatus =
   | "rejected"
   | "offer";
 
+export type SourceType = "telegram" | "jobspy";
+
 export type VacancyRecord = {
   id: number;
-  post_id: number;
+  post_id: number | null;
+  source_type: SourceType;
+  jobspy_job_id: number | null;
   title: string | null;
   company: string | null;
   status: VacancyStatus;
@@ -51,6 +55,15 @@ export type SettingsRecord = {
   max_posts_per_run: number;
   hours_lookback: number;
   custom_prompt: string | null;
+  jobspy_enabled: boolean;
+  jobspy_sites: string[];
+  jobspy_search_terms: string[];
+  jobspy_location: string | null;
+  jobspy_country: string;
+  jobspy_results_wanted: number;
+  jobspy_hours_old: number;
+  jobspy_job_type: string | null;
+  jobspy_is_remote: boolean | null;
 };
 
 export type SettingsUpdatePayload = Omit<SettingsRecord, "id">;

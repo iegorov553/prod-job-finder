@@ -5,8 +5,20 @@
   - `links` stores raw URLs extracted from text, entities, and inline buttons.
   - Failure diagnostics are stored in `analysis_error_code`, `analysis_error_message`,
     `analysis_http_status`, `analysis_attempts`, and `analysis_run_id`.
+- jobspy_jobs: raw job board results scraped by JobSpy.
+  - `site`: source platform (linkedin, indeed, glassdoor, google).
+  - `job_url`: unique URL used as deduplication key.
+  - Structured fields: `title`, `company`, `location`, `description`, `date_posted`.
+  - Salary fields: `salary_min`, `salary_max`, `salary_currency`.
+  - `job_type`, `is_remote`: job classification.
+  - `search_term`: the query that found this job.
+  - `raw_data`: full DataFrame row as JSONB for debugging.
 - vacancies: extracted job vacancies, relevance, status, and salary fields.
-  - `apply_link` is selected by LLM from post URLs.
+  - `source_type`: `'telegram'` or `'jobspy'` — indicates the data source.
+  - `jobspy_job_id`: references `jobspy_jobs(id)` for JobSpy-sourced vacancies.
+  - `post_id`: references `posts(id)` for Telegram-sourced vacancies (nullable).
+  - CHECK constraint ensures Telegram vacancies have `post_id` and JobSpy vacancies have `jobspy_job_id`.
+  - `apply_link` is selected by LLM from post URLs (Telegram) or is the `job_url` (JobSpy).
   - `links_json` stores vacancy-scoped links as JSON objects: `{ "url": "...", "type": "..." }`.
   - Enrichment fields:
     - `enrichment_status`: `pending|success|failed`.
@@ -18,7 +30,7 @@
 - post_analysis_attempts: per-post LLM attempt logs for troubleshooting (batch id, attempt no, HTTP
   status, error code/message, and response excerpt).
 - channel_states: per-channel last_message_id tracking.
-- settings: runtime configuration (channels, scheduler, LLM params, limits, custom_prompt).
+- settings: runtime configuration (channels, scheduler, LLM params, limits, custom_prompt, JobSpy config).
 - runs: pipeline run history (status, timestamps, digest, error).
 
 ## Local Files
@@ -36,3 +48,4 @@
 - migrations/009_post_analysis_diagnostics.sql: post failure diagnostics and
   `post_analysis_attempts` table.
 - migrations/010_vacancy_enrichment.sql: vacancy enrichment status and extracted text fields.
+- migrations/011_add_jobspy_support.sql: `jobspy_jobs` table, `vacancies` source_type/jobspy_job_id columns, `settings` JobSpy config columns.

@@ -28,6 +28,7 @@ EnrichmentStatus = Literal["pending", "success", "failed"]
 Seniority = Literal["junior", "middle", "senior", "lead", "head", "other"]
 RemoteType = Literal["remote", "hybrid", "onsite", "unknown"]
 Language = Literal["en", "ru", "other"]
+SourceType = Literal["telegram", "jobspy"]
 RunStatus = Literal["running", "success", "failed"]
 LinkType = Literal[
     "apply_direct",
@@ -127,13 +128,57 @@ class PostAnalysisAttemptCreate(BaseModel):
     response_excerpt: Optional[str] = None
 
 
+class JobSpyJobDB(BaseModel):
+    """Model for jobspy_jobs table (full record from DB)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    site: str
+    job_url: str
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    date_posted: Optional[str] = None
+    salary_min: Optional[Decimal] = None
+    salary_max: Optional[Decimal] = None
+    salary_currency: Optional[str] = None
+    job_type: Optional[str] = None
+    is_remote: Optional[bool] = None
+    search_term: Optional[str] = None
+    raw_data: Optional[Dict[str, Any]] = None
+    created_at: Optional[datetime] = None
+
+
+class JobSpyJobCreate(BaseModel):
+    """Model for creating a new jobspy_job record."""
+
+    site: str
+    job_url: str
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    date_posted: Optional[str] = None
+    salary_min: Optional[Decimal] = None
+    salary_max: Optional[Decimal] = None
+    salary_currency: Optional[str] = None
+    job_type: Optional[str] = None
+    is_remote: Optional[bool] = None
+    search_term: Optional[str] = None
+    raw_data: Optional[Dict[str, Any]] = None
+
+
 class VacancyDB(BaseModel):
     """Model for vacancies table (full record from DB)."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    post_id: int
+    post_id: Optional[int] = None
+    source_type: SourceType = "telegram"
+    jobspy_job_id: Optional[int] = None
     title: Optional[str] = None
     company: Optional[str] = None
     industry: Optional[str] = None
@@ -165,7 +210,9 @@ class VacancyDB(BaseModel):
 class VacancyCreate(BaseModel):
     """Model for creating a new vacancy."""
 
-    post_id: int
+    post_id: Optional[int] = None
+    source_type: SourceType = "telegram"
+    jobspy_job_id: Optional[int] = None
     title: Optional[str] = None
     company: Optional[str] = None
     industry: Optional[str] = None
@@ -260,6 +307,15 @@ class SettingsDB(BaseModel):
     max_posts_per_run: int = 30
     hours_lookback: int = 24
     custom_prompt: str  # Required, stored in database
+    jobspy_enabled: bool = False
+    jobspy_sites: List[str] = Field(default_factory=lambda: ["indeed", "google"])
+    jobspy_search_terms: List[str] = Field(default_factory=lambda: ["Product Manager"])
+    jobspy_location: Optional[str] = None
+    jobspy_country: str = "USA"
+    jobspy_results_wanted: int = 20
+    jobspy_hours_old: int = 24
+    jobspy_job_type: Optional[str] = None
+    jobspy_is_remote: Optional[bool] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -272,6 +328,26 @@ class SettingsDB(BaseModel):
         if isinstance(v, list):
             return v
         return []
+
+    @field_validator("jobspy_sites", mode="before")
+    @classmethod
+    def parse_jobspy_sites(cls, v: Any) -> List[str]:
+        """Parse JSONB jobspy_sites field."""
+        if v is None:
+            return ["indeed", "google"]
+        if isinstance(v, list):
+            return v
+        return ["indeed", "google"]
+
+    @field_validator("jobspy_search_terms", mode="before")
+    @classmethod
+    def parse_jobspy_search_terms(cls, v: Any) -> List[str]:
+        """Parse JSONB jobspy_search_terms field."""
+        if v is None:
+            return ["Product Manager"]
+        if isinstance(v, list):
+            return v
+        return ["Product Manager"]
 
     @field_validator("scheduler_time_utc")
     @classmethod
@@ -305,6 +381,15 @@ class SettingsUpdate(BaseModel):
     max_posts_per_run: Optional[int] = None
     hours_lookback: Optional[int] = None
     custom_prompt: Optional[str] = None
+    jobspy_enabled: Optional[bool] = None
+    jobspy_sites: Optional[List[str]] = None
+    jobspy_search_terms: Optional[List[str]] = None
+    jobspy_location: Optional[str] = None
+    jobspy_country: Optional[str] = None
+    jobspy_results_wanted: Optional[int] = None
+    jobspy_hours_old: Optional[int] = None
+    jobspy_job_type: Optional[str] = None
+    jobspy_is_remote: Optional[bool] = None
 
     @field_validator("scheduler_time_utc")
     @classmethod
@@ -316,6 +401,26 @@ class SettingsUpdate(BaseModel):
 
         if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", v):
             raise ValueError("Time must be in HH:MM format (00:00-23:59)")
+        return v
+
+    @field_validator("jobspy_results_wanted")
+    @classmethod
+    def validate_results_wanted(cls, v: Optional[int]) -> Optional[int]:
+        """Validate results_wanted range (1 - 100)."""
+        if v is None:
+            return None
+        if v < 1 or v > 100:
+            raise ValueError("Results wanted must be between 1 and 100")
+        return v
+
+    @field_validator("jobspy_hours_old")
+    @classmethod
+    def validate_hours_old(cls, v: Optional[int]) -> Optional[int]:
+        """Validate hours_old range (1 - 168)."""
+        if v is None:
+            return None
+        if v < 1 or v > 168:
+            raise ValueError("Hours old must be between 1 and 168")
         return v
 
     @field_validator("llm_temperature")
@@ -424,6 +529,7 @@ class RunUpdate(BaseModel):
 __all__ = [
     "AnalysisStatus",
     "AnalysisErrorCode",
+    "SourceType",
     "VacancyStatus",
     "EnrichmentStatus",
     "Seniority",
@@ -438,6 +544,8 @@ __all__ = [
     "PostCreate",
     "PostUpdate",
     "PostAnalysisAttemptCreate",
+    "JobSpyJobDB",
+    "JobSpyJobCreate",
     "VacancyDB",
     "VacancyCreate",
     "VacancyUpdate",

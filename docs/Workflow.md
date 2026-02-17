@@ -16,9 +16,20 @@ This describes what happens during a single run execution (via /run or the HTTP 
 11. Persist vacancies (including `apply_link` and `links_json`) and mark posts as analyzed.
 12. Run vacancy enrichment: fetch external pages from vacancy links, extract and LLM-clean vacancy text, and persist enrichment status/diagnostics.
 13. Update last_message_id per channel (only when new Telegram posts were fetched).
-14. Query new relevant vacancies and build the digest.
-15. Persist run status and digest to the runs table.
-16. Send the digest to the user via the control bot.
+14. If JobSpy is enabled, run the JobSpy pipeline (see below).
+15. Query new relevant vacancies (from both Telegram and JobSpy) and build the digest.
+16. Persist run status and digest to the runs table.
+17. Send the digest to the user via the control bot.
+
+## JobSpy Pipeline Steps
+When `jobspy_enabled` is true in settings, the following steps execute after the Telegram pipeline:
+1. Read JobSpy configuration from settings (sites, search terms, location, filters).
+2. For each search term, call `scrape_jobspy()` to query configured job boards.
+3. Deduplicate results by `job_url` within the batch and against existing database records.
+4. Insert new results into the `jobspy_jobs` table (upsert with `ON CONFLICT (job_url) DO NOTHING`).
+5. Convert each new job to a vacancy with `source_type='jobspy'` and `is_relevant=True`.
+6. Insert vacancies into the `vacancies` table.
+7. Log pipeline stats (scraped, new, inserted counts).
 
 ## Control Bot Responses
 - If an analysis run returns an empty message (for example via /retry_failed), the control bot sends a fallback message instead of failing.

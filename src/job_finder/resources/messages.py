@@ -102,3 +102,48 @@ HELP_PROMPT = [
     "/prompt_set <text> - установить промпт",
     "/prompt_reset - сбросить к дефолтному",
 ]
+
+# JobSpy Settings Commands
+JOBSPY_SETTINGS_HEADER = "🔍 JobSpy Настройки"
+JOBSPY_SETTINGS_ENABLED = "Статус"
+JOBSPY_SETTINGS_ENABLED_ON = "включён"
+JOBSPY_SETTINGS_ENABLED_OFF = "выключен"
+JOBSPY_SETTINGS_SITES = "Площадки"
+JOBSPY_SETTINGS_SEARCH_TERMS = "Поисковые запросы"
+JOBSPY_SETTINGS_LOCATION = "Локация"
+JOBSPY_SETTINGS_LOCATION_NOT_SET = "не задана"
+JOBSPY_SETTINGS_COUNTRY = "Страна"
+JOBSPY_SETTINGS_RESULTS = "Результатов"
+JOBSPY_SETTINGS_HOURS_OLD = "Не старше (ч)"
+JOBSPY_SETTINGS_JOB_TYPE = "Тип занятости"
+JOBSPY_SETTINGS_JOB_TYPE_NOT_SET = "любой"
+JOBSPY_SETTINGS_IS_REMOTE = "Удалёнка"
+JOBSPY_SETTINGS_IS_REMOTE_NOT_SET = "любой"
+
+JOBSPY_TOGGLED_ON = "✅ JobSpy включён"
+JOBSPY_TOGGLED_OFF = "✅ JobSpy выключен"
+
+JOBSPY_SITES_UPDATED = "✅ Площадки обновлены: {sites}"
+JOBSPY_SITES_USAGE = "Использование: /jobspy_sites linkedin,indeed,glassdoor,google"
+JOBSPY_SITES_INVALID = "❌ Допустимые площадки: linkedin, indeed, glassdoor, google"
+
+JOBSPY_SEARCH_UPDATED = "✅ Поисковые запросы обновлены: {terms}"
+JOBSPY_SEARCH_USAGE = "Использование: /jobspy_search Product Manager, Senior PM"
+
+JOBSPY_LOCATION_UPDATED = "✅ Локация обновлена: {location}"
+JOBSPY_LOCATION_USAGE = "Использование: /jobspy_location Remote"
+JOBSPY_LOCATION_RESET = "✅ Локация сброшена"
+
+JOBSPY_RESULTS_UPDATED = "✅ Количество результатов изменено на {count}"
+JOBSPY_RESULTS_USAGE = "Использование: /jobspy_results <1-100>"
+JOBSPY_RESULTS_INVALID = "❌ Количество результатов должно быть от 1 до 100"
+
+HELP_JOBSPY_HEADER = "JobSpy (job boards):"
+HELP_JOBSPY = [
+    "/jobspy - показать настройки JobSpy",
+    "/jobspy_toggle - включить/выключить",
+    "/jobspy_sites linkedin,indeed - площадки",
+    "/jobspy_search PM, Product Owner - запросы",
+    "/jobspy_location Remote - локация",
+    "/jobspy_results <1-100> - кол-во результатов",
+]

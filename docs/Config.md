@@ -26,6 +26,16 @@
 ## Dynamic Settings (Supabase)
 - Stored in the settings table and managed via Telegram commands.
 - Includes channels, scheduler, LLM model and limits, and custom_prompt.
+- JobSpy settings (managed via `/jobspy_*` commands or the web UI):
+  - `jobspy_enabled`: enable/disable JobSpy pipeline (default: false).
+  - `jobspy_sites`: JSON array of active sites, e.g. `["indeed","google"]` (default: `["indeed","google"]`).
+  - `jobspy_search_terms`: JSON array of search queries, e.g. `["Product Manager","Senior PM"]`.
+  - `jobspy_location`: location filter (optional).
+  - `jobspy_country`: country code for Indeed (default: `"USA"`).
+  - `jobspy_results_wanted`: max results per search term (default: 20).
+  - `jobspy_hours_old`: max age of postings in hours (default: 24).
+  - `jobspy_job_type`: job type filter — fulltime, parttime, contract, internship, or null.
+  - `jobspy_is_remote`: remote-only filter (optional).
 
 ## Related Files
 - .env.example: template for environment variables.

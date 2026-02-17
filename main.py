@@ -25,6 +25,7 @@ from job_finder.db.posts import create_posts_batch, mark_posts_analyzed
 from job_finder.db.runs import get_running_run, mark_running_failed
 from job_finder.db.settings import ensure_settings_exist
 from job_finder.db.vacancies import create_vacancies_batch, update_vacancies_enrichment
+from job_finder.jobspy_pipeline import run_jobspy_pipeline
 from job_finder.llm_client import LLMConfig
 from job_finder.resources import api_messages, messages
 from job_finder.run_service import RunInProgressError, RunService
@@ -310,6 +311,20 @@ async def _run_once(  # noqa: C901
             if last_id is not None:
                 update_last_message_id(channel, last_id)
                 logger.info("Updated last_message_id for %s: %s", channel, last_id)
+
+    # Run JobSpy pipeline (parallel source: job boards)
+    if settings_manager.get_jobspy_enabled():
+        try:
+            jobspy_result = run_jobspy_pipeline(settings_manager)
+            logger.info(
+                "JobSpy pipeline: scraped=%d, new=%d, dupes=%d, vacancies=%d",
+                jobspy_result.total_scraped,
+                jobspy_result.new_jobs,
+                jobspy_result.duplicates_skipped,
+                jobspy_result.vacancies_created,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("JobSpy pipeline failed: %s", exc)
 
     digest_text = digest_service.build_digest_from_db(limit=100)
 

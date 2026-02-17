@@ -46,7 +46,7 @@ def test_build_digest_from_db_uses_post_data() -> None:
 
     with (
         patch("job_finder.digest_service.get_new_relevant_vacancies", return_value=[vacancy]),
-        patch("job_finder.digest_service.get_post_by_id", return_value=post),
+        patch("job_finder.db.posts.get_post_by_id", return_value=post),
     ):
         digest_text = build_digest_from_db()
 

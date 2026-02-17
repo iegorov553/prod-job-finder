@@ -29,6 +29,7 @@ export const VacanciesTable = ({ vacancies, onStatusChange }: VacanciesTableProp
           <tr>
             <th>{copy.vacancies.columns.title}</th>
             <th>{copy.vacancies.columns.company}</th>
+            <th>{copy.vacancies.columns.source}</th>
             <th>{copy.vacancies.columns.relevant}</th>
             <th>{copy.vacancies.columns.status}</th>
           </tr>
@@ -39,6 +40,7 @@ export const VacanciesTable = ({ vacancies, onStatusChange }: VacanciesTableProp
               <tr key={vacancy.id}>
                 <td>{vacancy.title ?? copy.common.empty}</td>
                 <td>{vacancy.company ?? copy.common.empty}</td>
+                <td>{vacancy.source_type === "jobspy" ? "JobSpy" : "Telegram"}</td>
                 <td>{vacancy.is_relevant ? copy.common.yes : copy.common.no}</td>
                 <td>
                   <label className="sr-only" htmlFor={`status-${vacancy.id}`}>
@@ -65,7 +67,7 @@ export const VacanciesTable = ({ vacancies, onStatusChange }: VacanciesTableProp
             ))
           ) : (
             <tr>
-              <td colSpan={4} className="muted">
+              <td colSpan={5} className="muted">
                 {copy.vacancies.empty}
               </td>
             </tr>

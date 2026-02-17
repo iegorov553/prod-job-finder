@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict, cast
 
 from job_finder.db.models import SettingsDB
 from job_finder.db.settings import get_settings
@@ -23,6 +23,16 @@ DEFAULT_CACHE_TTL = 60.0
 class SchedulerConfigDict(TypedDict):
     enabled: bool
     time_utc: Optional[str]
+
+
+class JobSpyConfigDict(TypedDict):
+    sites: List[str]
+    location: Optional[str]
+    country: str
+    results_wanted: int
+    hours_old: int
+    is_remote: Optional[bool]
+    job_type: Optional[str]
 
 
 class SettingsManagerError(Exception):
@@ -259,6 +269,53 @@ class SettingsManager:
             Hours to look back
         """
         return self.get_processing_limits()["hours_lookback"]
+
+    # --- JobSpy settings ---
+
+    def get_jobspy_enabled(self) -> bool:
+        """Check if JobSpy integration is enabled.
+
+        Returns:
+            True if JobSpy pipeline should run
+        """
+        settings = self.get_settings()
+        if settings:
+            return settings.jobspy_enabled
+        return False
+
+    def get_jobspy_search_terms(self) -> List[str]:
+        """Get JobSpy search terms.
+
+        Returns:
+            List of search term strings
+        """
+        settings = self.get_settings()
+        if settings and settings.jobspy_search_terms:
+            return settings.jobspy_search_terms
+        return ["Product Manager"]
+
+    def get_jobspy_config(self) -> Optional[JobSpyConfigDict]:
+        """Get complete JobSpy configuration.
+
+        Returns:
+            Dict with all JobSpy settings, or None if disabled
+        """
+        settings = self.get_settings()
+        if not settings or not settings.jobspy_enabled:
+            return None
+
+        return cast(
+            JobSpyConfigDict,
+            {
+                "sites": settings.jobspy_sites or ["indeed", "google"],
+                "location": settings.jobspy_location,
+                "country": settings.jobspy_country or "USA",
+                "results_wanted": settings.jobspy_results_wanted or 20,
+                "hours_old": settings.jobspy_hours_old or 24,
+                "is_remote": settings.jobspy_is_remote,
+                "job_type": settings.jobspy_job_type,
+            },
+        )
 
 
 # Global singleton instance

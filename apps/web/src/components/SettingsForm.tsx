@@ -52,6 +52,33 @@ export const SettingsForm = ({
   const [customPrompt, setCustomPrompt] = useState(
     initialSettings.custom_prompt ?? ""
   );
+  const [jobspyEnabled, setJobspyEnabled] = useState(
+    initialSettings.jobspy_enabled
+  );
+  const [jobspySitesInput, setJobspySitesInput] = useState(
+    initialSettings.jobspy_sites.join(", ")
+  );
+  const [jobspySearchTermsInput, setJobspySearchTermsInput] = useState(
+    initialSettings.jobspy_search_terms.join(", ")
+  );
+  const [jobspyLocation, setJobspyLocation] = useState(
+    initialSettings.jobspy_location ?? ""
+  );
+  const [jobspyCountry, setJobspyCountry] = useState(
+    initialSettings.jobspy_country
+  );
+  const [jobspyResultsWanted, setJobspyResultsWanted] = useState(
+    initialSettings.jobspy_results_wanted
+  );
+  const [jobspyHoursOld, setJobspyHoursOld] = useState(
+    initialSettings.jobspy_hours_old
+  );
+  const [jobspyJobType, setJobspyJobType] = useState(
+    initialSettings.jobspy_job_type ?? ""
+  );
+  const [jobspyIsRemote, setJobspyIsRemote] = useState(
+    initialSettings.jobspy_is_remote
+  );
 
   const payload = useMemo<SettingsUpdatePayload>(
     () => ({
@@ -66,7 +93,16 @@ export const SettingsForm = ({
       max_posts_per_batch: maxPostsPerBatch,
       max_posts_per_run: maxPostsPerRun,
       hours_lookback: hoursLookback,
-      custom_prompt: customPrompt || null
+      custom_prompt: customPrompt || null,
+      jobspy_enabled: jobspyEnabled,
+      jobspy_sites: parseChannels(jobspySitesInput),
+      jobspy_search_terms: parseChannels(jobspySearchTermsInput),
+      jobspy_location: jobspyLocation || null,
+      jobspy_country: jobspyCountry,
+      jobspy_results_wanted: jobspyResultsWanted,
+      jobspy_hours_old: jobspyHoursOld,
+      jobspy_job_type: jobspyJobType || null,
+      jobspy_is_remote: jobspyIsRemote
     }),
     [
       channelsInput,
@@ -80,7 +116,16 @@ export const SettingsForm = ({
       maxPostsPerBatch,
       maxPostsPerRun,
       hoursLookback,
-      customPrompt
+      customPrompt,
+      jobspyEnabled,
+      jobspySitesInput,
+      jobspySearchTermsInput,
+      jobspyLocation,
+      jobspyCountry,
+      jobspyResultsWanted,
+      jobspyHoursOld,
+      jobspyJobType,
+      jobspyIsRemote
     ]
   );
 
@@ -232,6 +277,99 @@ export const SettingsForm = ({
             onChange={(event) => setCustomPrompt(event.target.value)}
             rows={6}
           />
+        </label>
+      </section>
+
+      <section className="form-section">
+        <h3>{copy.settings.sections.jobspy}</h3>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={jobspyEnabled}
+            onChange={(event) => setJobspyEnabled(event.target.checked)}
+          />
+          <span>{copy.settings.fields.jobspyEnabled}</span>
+        </label>
+        <label>
+          <span>{copy.settings.fields.jobspySites}</span>
+          <input
+            name="jobspy_sites"
+            value={jobspySitesInput}
+            onChange={(event) => setJobspySitesInput(event.target.value)}
+            disabled={!jobspyEnabled}
+          />
+        </label>
+        <label>
+          <span>{copy.settings.fields.jobspySearchTerms}</span>
+          <input
+            name="jobspy_search_terms"
+            value={jobspySearchTermsInput}
+            onChange={(event) => setJobspySearchTermsInput(event.target.value)}
+            disabled={!jobspyEnabled}
+          />
+        </label>
+        <label>
+          <span>{copy.settings.fields.jobspyLocation}</span>
+          <input
+            name="jobspy_location"
+            value={jobspyLocation}
+            onChange={(event) => setJobspyLocation(event.target.value)}
+            disabled={!jobspyEnabled}
+          />
+        </label>
+        <label>
+          <span>{copy.settings.fields.jobspyCountry}</span>
+          <input
+            name="jobspy_country"
+            value={jobspyCountry}
+            onChange={(event) => setJobspyCountry(event.target.value)}
+            disabled={!jobspyEnabled}
+          />
+        </label>
+        <label>
+          <span>{copy.settings.fields.jobspyResultsWanted}</span>
+          <input
+            type="number"
+            name="jobspy_results_wanted"
+            value={jobspyResultsWanted}
+            onChange={(event) => setJobspyResultsWanted(Number(event.target.value))}
+            min="1"
+            max="100"
+            disabled={!jobspyEnabled}
+          />
+        </label>
+        <label>
+          <span>{copy.settings.fields.jobspyHoursOld}</span>
+          <input
+            type="number"
+            name="jobspy_hours_old"
+            value={jobspyHoursOld}
+            onChange={(event) => setJobspyHoursOld(Number(event.target.value))}
+            min="1"
+            max="168"
+            disabled={!jobspyEnabled}
+          />
+        </label>
+        <label>
+          <span>{copy.settings.fields.jobspyJobType}</span>
+          <input
+            name="jobspy_job_type"
+            value={jobspyJobType}
+            onChange={(event) => setJobspyJobType(event.target.value)}
+            placeholder="fulltime, parttime, contract, internship"
+            disabled={!jobspyEnabled}
+          />
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={jobspyIsRemote ?? false}
+            onChange={(event) =>
+              setJobspyIsRemote(event.target.checked ? true : null)
+            }
+            disabled={!jobspyEnabled}
+          />
+          <span>{copy.settings.fields.jobspyIsRemote}</span>
         </label>
       </section>
     </form>

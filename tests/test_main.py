@@ -82,6 +82,7 @@ def test_run_once_calls_vacancy_enrichment(monkeypatch) -> None:
             "retry_max": 1,
             "retry_backoff": 1.0,
         },
+        get_jobspy_enabled=lambda: False,
     )
 
     pending_post = PostDB(

@@ -46,7 +46,8 @@ export const copy = {
       title: "Title",
       company: "Company",
       status: "Status",
-      relevant: "Relevant"
+      relevant: "Relevant",
+      source: "Source"
     },
     aria: {
       statusFor: "Status for {title}"
@@ -70,7 +71,8 @@ export const copy = {
       scheduler: "Scheduler",
       llm: "LLM",
       limits: "Limits",
-      prompt: "Custom prompt"
+      prompt: "Custom prompt",
+      jobspy: "JobSpy (Job Boards)"
     },
     fields: {
       channels: "Channels (comma-separated)",
@@ -84,7 +86,16 @@ export const copy = {
       maxPostsPerBatch: "Max posts per batch",
       maxPostsPerRun: "Max posts per run",
       hoursLookback: "Hours lookback",
-      customPrompt: "Custom prompt"
+      customPrompt: "Custom prompt",
+      jobspyEnabled: "JobSpy enabled",
+      jobspySites: "Sites (comma-separated: linkedin, indeed, glassdoor, google)",
+      jobspySearchTerms: "Search terms (comma-separated)",
+      jobspyLocation: "Location",
+      jobspyCountry: "Country code",
+      jobspyResultsWanted: "Results per search",
+      jobspyHoursOld: "Max age (hours)",
+      jobspyJobType: "Job type (fulltime, parttime, contract, internship)",
+      jobspyIsRemote: "Remote only"
     }
   },
   actions: {
