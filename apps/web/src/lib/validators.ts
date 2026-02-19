@@ -71,6 +71,29 @@ export const parseSettingsUpdate = (payload: unknown): SettingsUpdatePayload => 
     throw new Error("hours_lookback");
   }
 
+  const jobspyEnabled = Boolean(data.jobspy_enabled);
+  const jobspySites = Array.isArray(data.jobspy_sites)
+    ? data.jobspy_sites.filter((item): item is string => typeof item === "string")
+    : [];
+  const jobspySearchTerms = Array.isArray(data.jobspy_search_terms)
+    ? data.jobspy_search_terms.filter((item): item is string => typeof item === "string")
+    : [];
+  const jobspyLocation =
+    data.jobspy_location === null || data.jobspy_location === undefined
+      ? null
+      : asString(data.jobspy_location, "jobspy_location");
+  const jobspyCountry = asString(data.jobspy_country, "jobspy_country");
+  const jobspyResultsWanted = asNumber(data.jobspy_results_wanted, "jobspy_results_wanted");
+  const jobspyHoursOld = asNumber(data.jobspy_hours_old, "jobspy_hours_old");
+  const jobspyJobType =
+    data.jobspy_job_type === null || data.jobspy_job_type === undefined
+      ? null
+      : asString(data.jobspy_job_type, "jobspy_job_type");
+  const jobspyIsRemote =
+    data.jobspy_is_remote === null || data.jobspy_is_remote === undefined
+      ? null
+      : Boolean(data.jobspy_is_remote);
+
   return {
     channels,
     scheduler_enabled: schedulerEnabled,
@@ -83,6 +106,15 @@ export const parseSettingsUpdate = (payload: unknown): SettingsUpdatePayload => 
     max_posts_per_batch: maxPostsPerBatch,
     max_posts_per_run: maxPostsPerRun,
     hours_lookback: hoursLookback,
-    custom_prompt: customPrompt
+    custom_prompt: customPrompt,
+    jobspy_enabled: jobspyEnabled,
+    jobspy_sites: jobspySites,
+    jobspy_search_terms: jobspySearchTerms,
+    jobspy_location: jobspyLocation,
+    jobspy_country: jobspyCountry,
+    jobspy_results_wanted: jobspyResultsWanted,
+    jobspy_hours_old: jobspyHoursOld,
+    jobspy_job_type: jobspyJobType,
+    jobspy_is_remote: jobspyIsRemote,
   };
 };

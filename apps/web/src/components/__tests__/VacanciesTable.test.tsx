@@ -15,10 +15,18 @@ const vacancies = [
     status: "new" as const,
     is_relevant: true,
     post_id: 1,
+    source_type: "telegram" as const,
+    jobspy_job_id: null,
+    enrichment_status: "pending" as const,
+    enrichment_attempts: 0,
+    enrichment_error: null,
+    enrichment_completed_at: null,
+    vacancy_text_full: null,
+    vacancy_text_source_url: null,
     location: null,
     level: null,
     remote_type: "remote",
-    created_at: null
+    created_at: null,
   },
 ];
 

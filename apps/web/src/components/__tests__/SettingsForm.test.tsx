@@ -21,6 +21,15 @@ const settings = {
   max_posts_per_run: 30,
   hours_lookback: 24,
   custom_prompt: "Prompt",
+  jobspy_enabled: false,
+  jobspy_sites: ["indeed", "google"],
+  jobspy_search_terms: [],
+  jobspy_location: null,
+  jobspy_country: "USA",
+  jobspy_results_wanted: 20,
+  jobspy_hours_old: 24,
+  jobspy_job_type: null,
+  jobspy_is_remote: null,
 };
 
 describe("SettingsForm", () => {
